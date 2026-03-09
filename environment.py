@@ -46,7 +46,7 @@ class Game:
                 return True
         return False
 
-    def observe(self, observer_id):
+    def observe(self, observer_id, delete_observed_actions_since_last_turn_array = True):
         observer = self.agents[observer_id]
 
         visible_positions = {}
@@ -55,13 +55,15 @@ class Game:
                 visible_positions[agent_id] = agent.position
         
         copy = self.observed_actions_since_last_turn_array[observer_id]
-        self.observed_actions_since_last_turn_array[observer_id] = []
+        if delete_observed_actions_since_last_turn_array:
+            self.observed_actions_since_last_turn_array[observer_id] = []
         return visible_positions, copy
     
     def observed_actions_since_last_turn(self, agent_id, new_position, old_position):
         for observer_id, observer in self.agents.items():
-            if agent_id != observer_id and self.do_we_observe_agent(observer.position, old_position):
-                self.observed_actions_since_last_turnb[observer_id].append((agent_id, new_position))
+            if agent_id != observer_id and (self.do_we_observe_agent(observer.position, old_position)
+                                            or self.do_we_observe_agent(observer.position, new_position)):
+                self.observed_actions_since_last_turnb[observer_id].append((agent_id, old_position, new_position))
         
     def agent_move(self, agent_id, action):
         agent = self.agents[agent_id]
@@ -84,5 +86,4 @@ def Create_Game(size, t_max, seed):
         "E1": Agent("E1", position_3),
     }
     return Game(size, agents, ("P1", "P2"), "E1", t_max)
-
 
