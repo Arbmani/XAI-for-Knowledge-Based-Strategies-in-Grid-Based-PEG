@@ -6,6 +6,7 @@ class LSTM(nn.Module):
         super().__init__()
         
         self.device                 = device
+        self.hidden_state_size      = hidden_state_size
 
         self.observation_to_hidden  = nn.Sequential(
             nn.Linear(observation_size, hidden_state_size),
@@ -16,19 +17,23 @@ class LSTM(nn.Module):
         self.evader_belief_logit_map    = nn.Linear(hidden_state_size, possible_positions)
         self.teammate_belief_logit_map  = nn.Linear(hidden_state_size, possible_positions)
 
-        def init_state(self):
-            hidden_state    = torch.zeros(self.hidden_state_size, device = self.device) 
-            cell_state      = torch.zeros(self.hidden_state_size, device = self.device) 
-            return hidden_state, cell_state
+    def init_state(self):
+        hidden_state    = torch.zeros(self.hidden_state_size, device = self.device) 
+        cell_state      = torch.zeros(self.hidden_state_size, device = self.device) 
+        return hidden_state, cell_state
         
-        def forward(self, observation, hidden_state, cell_state):
-            o_t = self.observation_to_hidden(observation)
+    def forward(self, observation, hidden_state, cell_state):
+        o_t = self.observation_to_hidden(observation)
             
-            new_hidden_state, new_cell_state = self.lstm(o_t, (hidden_state, cell_state))
+        new_hidden_state, new_cell_state = self.lstm(o_t, (hidden_state, cell_state))
             
-            evader_logits   = self.evader_belief_logit_map(new_hidden_state)
-            teammate_logits = self.teammate_belief_logit_map(new_hidden_state)
+        evader_logits   = self.evader_belief_logit_map(new_hidden_state)
+        teammate_logits = self.teammate_belief_logit_map(new_hidden_state)
 
-            return new_hidden_state, new_cell_state, evader_logits, teammate_logits  
+        return new_hidden_state, new_cell_state, evader_logits, teammate_logits  
+    
+    def freeze(self):
+        self.requires_grad_(False)
+        self.eval()
 
 

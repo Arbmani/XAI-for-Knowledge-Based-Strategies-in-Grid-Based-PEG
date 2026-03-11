@@ -16,7 +16,7 @@ def get_observation(agent_id, game):
     evader_position     = visible_positions.get(game.evader_id, None)
 
     teammate_id         = game.pursuer_ids[0] if agent_id == game.pursuer_ids[1] else game.pursuer_ids[1]
-    teammate_position   = visible_positions.get(game.teammate_id, None)
+    teammate_position   = visible_positions.get(teammate_id, None)
 
     for(observed_id, _, position) in observed_actions:
         if observed_id == teammate_id:
@@ -34,7 +34,6 @@ def get_observation(agent_id, game):
     observation = torch.tensor(
         [[agent_row, agent_column, evader_observed, evader_row, evader_column, teammate_observed, teammate_row, teammate_column]],
         dtype=torch.float32, 
-        device=device,
     )
     return observation
 

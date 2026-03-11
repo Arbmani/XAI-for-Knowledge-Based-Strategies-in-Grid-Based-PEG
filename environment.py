@@ -63,7 +63,7 @@ class Game:
         for observer_id, observer in self.agents.items():
             if agent_id != observer_id and (self.do_we_observe_agent(observer.position, old_position)
                                             or self.do_we_observe_agent(observer.position, new_position)):
-                self.observed_actions_since_last_turnb[observer_id].append((agent_id, old_position, new_position))
+                self.observed_actions_since_last_turn_array[observer_id].append((agent_id, old_position, new_position))
         
     def agent_move(self, agent_id, action):
         agent = self.agents[agent_id]
@@ -82,7 +82,7 @@ def Create_Game(size, t_max, seed):
     position_1, position_2, position_3 = random_starting_position(size)
     agents = {
         "P1": Agent("P1", position_1),
-        "P1": Agent("P2", position_2),
+        "P2": Agent("P2", position_2),
         "E1": Agent("E1", position_3),
     }
     return Game(size, agents, ("P1", "P2"), "E1", t_max)
