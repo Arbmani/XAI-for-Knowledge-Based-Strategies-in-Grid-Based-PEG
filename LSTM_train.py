@@ -136,7 +136,7 @@ def validate(p1_lstm, p2_lstm, size, t_max, batch_size, hidden_state_size, batch
         p2_loss_average += p2_loss 
 
     print(f"p1_lstm{hidden_state_size} loss average : {p1_loss_average / batches}")
-    print(f"p1_lstm{hidden_state_size} loss average : {p1_loss_average / batches}")
+    print(f"p2_lstm{hidden_state_size} loss average : {p2_loss_average / batches}")
 
 if __name__ == "__main__":
     size = 15
