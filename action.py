@@ -32,7 +32,7 @@ def get_observation(agent_id, game):
     teammate_row, teammate_column   = (0,0) if teammate_position is None else teammate_position
 
     observation = torch.tensor(
-        [[agent_row, agent_column, evader_observed, evader_row, evader_column, teammate_observed, teammate_row, teammate_column]],
+        [agent_row, agent_column, evader_observed, evader_row, evader_column, teammate_observed, teammate_row, teammate_column],
         dtype=torch.float32, 
     )
     return observation

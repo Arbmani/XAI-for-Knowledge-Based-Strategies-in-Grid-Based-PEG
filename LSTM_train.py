@@ -1,5 +1,6 @@
 import random 
 import torch
+import torch.nn.functional as F
 
 from action import get_observation, device 
 from environment import Create_Game
@@ -59,9 +60,9 @@ def batch(size, batch_size, t_max, seed):
 
     P1_observations_batch_tensor    = torch.zeros(batch_size, t_max, 8, dtype=torch.float32)
     P2_observations_batch_tensor    = torch.zeros(batch_size, t_max, 8, dtype=torch.float32)
-    P1_positions_batch_tensor       = torch.zeros(batch_size, t_max, dtype=torch.float32)
-    P2_positions_batch_tensor       = torch.zeros(batch_size, t_max, dtype=torch.float32)
-    E1_positions_batch_tensor       = torch.zeros(batch_size, t_max, dtype=torch.float32)
+    P1_positions_batch_tensor       = torch.zeros(batch_size, t_max, dtype=torch.long)
+    P2_positions_batch_tensor       = torch.zeros(batch_size, t_max, dtype=torch.long)
+    E1_positions_batch_tensor       = torch.zeros(batch_size, t_max, dtype=torch.long)
     mask_tensor                     = torch.zeros(batch_size, t_max, dtype=torch.float32)
 
     for batch in range(batch_size):
@@ -70,9 +71,9 @@ def batch(size, batch_size, t_max, seed):
         P1_observations_batch_tensor[batch, : T] = torch.stack(P1_observations_batch[batch], dim = 0)
         P2_observations_batch_tensor[batch, : T] = torch.stack(P2_observations_batch[batch], dim = 0)
 
-        P1_positions_batch_tensor[batch, :T]    = torch.stack(P1_positions_batch[batch], dyupe=torch.float32)
-        P2_positions_batch_tensor[batch, :T]    = torch.stack(P2_positions_batch[batch], dyupe=torch.float32)
-        E1_positions_batch_tensor[batch, :T]    = torch.stack(E1_positions_batch[batch], dyupe=torch.float32)
+        P1_positions_batch_tensor[batch, :T]    = torch.tensor(P1_positions_batch[batch], dtype=torch.long)
+        P2_positions_batch_tensor[batch, :T]    = torch.tensor(P2_positions_batch[batch], dtype=torch.long)
+        E1_positions_batch_tensor[batch, :T]    = torch.tensor(E1_positions_batch[batch], dtype=torch.long)
 
         mask_tensor[batch, :T]                  = 1.0
 
@@ -84,14 +85,64 @@ def batch(size, batch_size, t_max, seed):
             mask_tensor.to(device))
 
 
-def loss(lstm, observations, evader_positions, teamamte_positions, mask):
-    return -1
+def loss(p1_lstm, p2_lstm, P1_observations_batch_tensor, P2_observations_batch_tensor, P1_positions_batch_tensor, P2_positions_batch_tensor, E1_positions_batch_tensor, mask_tensor):
+
+    batch, T, _ = P1_observations_batch_tensor.shape
+
+    p1_hidden_state, p1_cell_state = p1_lstm.init_state(batch)    
+    p2_hidden_state, p2_cell_state = p2_lstm.init_state(batch)
+
+    p1_loss = 0.0
+    p2_loss = 0.0
+    steps   = 0.0
+
+    for t in range(T):
+        p1_hidden_state, p1_cell_state, p1_evader_logits, p1_teammate_logits = p1_lstm(P1_observations_batch_tensor[:,t], p1_hidden_state, p1_cell_state)
+        p2_hidden_state, p2_cell_state, p2_evader_logits, p2_teammate_logits = p2_lstm(P2_observations_batch_tensor[:,t], p2_hidden_state, p2_cell_state)
+
+        p1_evader_logits_loss       = F.cross_entropy(p1_evader_logits, E1_positions_batch_tensor[:,t], reduction="none")
+        p1_teammate_logits_loss     = F.cross_entropy(p1_teammate_logits, P2_positions_batch_tensor[:,t], reduction="none")
+
+        p2_evader_logits_loss       = F.cross_entropy(p2_evader_logits, E1_positions_batch_tensor[:,t], reduction="none")
+        p2_teammate_logits_loss     = F.cross_entropy(p2_teammate_logits, P1_positions_batch_tensor[:,t], reduction="none")
+
+        p1_t_loss   = p1_evader_logits_loss + p1_teammate_logits_loss
+        p2_t_loss   = p2_evader_logits_loss + p2_teammate_logits_loss
+
+        t_mask      = mask_tensor[:, t]
+        p1_loss += (p1_t_loss * t_mask).sum()
+        p2_loss += (p2_t_loss * t_mask).sum()
+
+        steps   += t_mask.sum()
+
+    return (p1_loss / steps), (p2_loss / steps)
+
+def validate(p1_lstm, p2_lstm, size, t_max, batch_size, hidden_state_size, batches, seed):
+
+    p1_loss_average = 0.0
+    p2_loss_average = 0.0
+
+    for b in range(batches):
+        seed = seed + b 
+        (P1_observations_batch_tensor,
+        P2_observations_batch_tensor,
+        P1_positions_batch_tensor,
+        P2_positions_batch_tensor,
+        E1_positions_batch_tensor,
+        mask_tensor) = batch(size, batch_size, t_max, seed)
+
+        p1_loss, p2_loss = loss(p1_lstm, p2_lstm, P1_observations_batch_tensor, P2_observations_batch_tensor, P1_positions_batch_tensor, P2_positions_batch_tensor, E1_positions_batch_tensor, mask_tensor)
+        p1_loss_average += p1_loss
+        p2_loss_average += p2_loss 
+
+    print(f"p1_lstm{hidden_state_size} loss average : {p1_loss_average / batches}")
+    print(f"p1_lstm{hidden_state_size} loss average : {p1_loss_average / batches}")
 
 if __name__ == "__main__":
     size = 15
     t_max = 50
-    hidden_state_sizes = [32, 64, 128, 256]
-    updates = 2000
+    hidden_state_sizes = [32, 64, 96, 128, 256]
+    batches = 300
     batch_size = 64
     learning_rate = 1e-3
     possible_positions = size*size 
@@ -101,14 +152,14 @@ if __name__ == "__main__":
         random.seed(seed)
         torch.manual_seed(seed)
 
-        p1_lstm = LSTM(8, hidden_state_size, possible_positions, device).to(device)
-        p2_lstm = LSTM(8, hidden_state_size, possible_positions, device).to(device)
+        p1_lstm = LSTM(hidden_state_size, possible_positions, device).to(device)
+        p2_lstm = LSTM(hidden_state_size, possible_positions, device).to(device)
 
         p1_lstm_opt = torch.optim.Adam(p1_lstm.parameters(), lr=learning_rate)
         p2_lstm_opt = torch.optim.Adam(p2_lstm.parameters(), lr=learning_rate)
 
-        for update in range(updates):
-            seed = seed + update 
+        for b in range(batches):
+            seed = seed + b 
             (P1_observations_batch_tensor,
             P2_observations_batch_tensor,
             P1_positions_batch_tensor,
@@ -116,9 +167,27 @@ if __name__ == "__main__":
             E1_positions_batch_tensor,
             mask_tensor) = batch(size, batch_size, t_max, seed)
 
-            
+            p1_loss, p2_loss = loss(p1_lstm, p2_lstm, P1_observations_batch_tensor, P2_observations_batch_tensor, P1_positions_batch_tensor, P2_positions_batch_tensor, E1_positions_batch_tensor, mask_tensor)
+        
+            p1_lstm_opt.zero_grad()
+            p2_lstm_opt.zero_grad()
 
+            p1_loss.backward()
+            p2_loss.backward()
 
+            torch.nn.utils.clip_grad_norm_(p1_lstm.parameters(), 5.0)
+            torch.nn.utils.clip_grad_norm_(p2_lstm.parameters(), 5.0)
+
+            p1_lstm_opt.step()
+            p2_lstm_opt.step()
+
+        p1_lstm.freeze()
+        p2_lstm.freeze()
+
+        validate(p1_lstm, p2_lstm, size, t_max, batch_size, hidden_state_size, batches = 100, seed = 999123999)
+
+        torch.save(p1_lstm.state_dict(), f"p1_lstm{hidden_state_size}.pt")
+        torch.save(p2_lstm.state_dict(), f"p2_lstm{hidden_state_size}.pt")
 
 
 

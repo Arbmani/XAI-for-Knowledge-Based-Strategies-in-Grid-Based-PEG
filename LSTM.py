@@ -2,14 +2,15 @@ import torch
 import torch.nn as nn
 
 class LSTM(nn.Module):
-    def __init__(self, observation_size, hidden_state_size, possible_positions, device):
+    def __init__(self, hidden_state_size, possible_positions, device):
         super().__init__()
         
         self.device                 = device
         self.hidden_state_size      = hidden_state_size
+        self.observation_size       = 8
 
         self.observation_to_hidden  = nn.Sequential(
-            nn.Linear(observation_size, hidden_state_size),
+            nn.Linear(self.observation_size, hidden_state_size),
             nn.ReLU(),
         )
 
@@ -17,9 +18,9 @@ class LSTM(nn.Module):
         self.evader_belief_logit_map    = nn.Linear(hidden_state_size, possible_positions)
         self.teammate_belief_logit_map  = nn.Linear(hidden_state_size, possible_positions)
 
-    def init_state(self):
-        hidden_state    = torch.zeros(self.hidden_state_size, device = self.device) 
-        cell_state      = torch.zeros(self.hidden_state_size, device = self.device) 
+    def init_state(self, batch_size):
+        hidden_state    = torch.zeros(batch_size, self.hidden_state_size, device = self.device) 
+        cell_state      = torch.zeros(batch_size, self.hidden_state_size, device = self.device) 
         return hidden_state, cell_state
         
     def forward(self, observation, hidden_state, cell_state):
