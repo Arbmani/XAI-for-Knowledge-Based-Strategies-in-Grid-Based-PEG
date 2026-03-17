@@ -21,13 +21,13 @@ def simulate(game, size, t_max):
     
     for t in range(t_max):
         P1_observations.append(get_observation("P1", game))
-        P2_observations.append(get_observation("P2", game))
 
         P1_positions.append(row_col_to_scalar(game.agents["P1"].position))
         P2_positions.append(row_col_to_scalar(game.agents["P2"].position))
         E1_positions.append(row_col_to_scalar(game.agents["E1"].position))
 
         game.agent_move("P1", random.choice(game.valid_moves(game.agents["P1"].position)))
+        P2_observations.append(get_observation("P2", game))
         if game.is_evader_captured():
             break
         game.agent_move("P2", random.choice(game.valid_moves(game.agents["P2"].position)))
@@ -58,12 +58,12 @@ def batch(size, batch_size, t_max, seed):
         P2_positions_batch.append(P2_positions)
         E1_positions_batch.append(E1_positions)
 
-    P1_observations_batch_tensor    = torch.zeros(batch_size, t_max, 8, dtype=torch.float32)
-    P2_observations_batch_tensor    = torch.zeros(batch_size, t_max, 8, dtype=torch.float32)
-    P1_positions_batch_tensor       = torch.zeros(batch_size, t_max, dtype=torch.long)
-    P2_positions_batch_tensor       = torch.zeros(batch_size, t_max, dtype=torch.long)
-    E1_positions_batch_tensor       = torch.zeros(batch_size, t_max, dtype=torch.long)
-    mask_tensor                     = torch.zeros(batch_size, t_max, dtype=torch.float32)
+    P1_observations_batch_tensor    = torch.zeros(batch_size, t_max, 8, dtype=torch.float32, device = device)
+    P2_observations_batch_tensor    = torch.zeros(batch_size, t_max, 8, dtype=torch.float32, device = device)
+    P1_positions_batch_tensor       = torch.zeros(batch_size, t_max, dtype=torch.long, device=device)
+    P2_positions_batch_tensor       = torch.zeros(batch_size, t_max, dtype=torch.long, device=device)
+    E1_positions_batch_tensor       = torch.zeros(batch_size, t_max, dtype=torch.long, device=device)
+    mask_tensor                     = torch.zeros(batch_size, t_max, dtype=torch.float32, device=device)
 
     for batch in range(batch_size):
         T = len(P1_observations_batch[batch])
@@ -77,12 +77,12 @@ def batch(size, batch_size, t_max, seed):
 
         mask_tensor[batch, :T]                  = 1.0
 
-    return (P1_observations_batch_tensor.to(device),
-            P2_observations_batch_tensor.to(device),
-            P1_positions_batch_tensor.to(device),
-            P2_positions_batch_tensor.to(device),
-            E1_positions_batch_tensor.to(device),
-            mask_tensor.to(device))
+    return (P1_observations_batch_tensor,
+            P2_observations_batch_tensor,
+            P1_positions_batch_tensor,
+            P2_positions_batch_tensor,
+            E1_positions_batch_tensor,
+            mask_tensor)
 
 
 def loss(p1_lstm, p2_lstm, P1_observations_batch_tensor, P2_observations_batch_tensor, P1_positions_batch_tensor, P2_positions_batch_tensor, E1_positions_batch_tensor, mask_tensor):
@@ -141,8 +141,8 @@ def validate(p1_lstm, p2_lstm, size, t_max, batch_size, hidden_state_size, batch
 if __name__ == "__main__":
     size = 15
     t_max = 50
-    hidden_state_sizes = [32, 64, 96, 128, 256]
-    batches = 300
+    hidden_state_sizes = [96]
+    batches = 10_000
     batch_size = 64
     learning_rate = 1e-3
     possible_positions = size*size 
@@ -181,10 +181,10 @@ if __name__ == "__main__":
             p1_lstm_opt.step()
             p2_lstm_opt.step()
 
-        p1_lstm.freeze()
-        p2_lstm.freeze()
+        p1_lstm.stop()
+        p2_lstm.stop()
 
-        validate(p1_lstm, p2_lstm, size, t_max, batch_size, hidden_state_size, batches = 100, seed = 999123999)
+        validate(p1_lstm, p2_lstm, size, t_max, batch_size, hidden_state_size, batches = 1, seed = 999123999)
 
         torch.save(p1_lstm.state_dict(), f"p1_lstm{hidden_state_size}.pt")
         torch.save(p2_lstm.state_dict(), f"p2_lstm{hidden_state_size}.pt")

@@ -18,7 +18,7 @@ class LSTM(nn.Module):
         self.evader_belief_logit_map    = nn.Linear(hidden_state_size, possible_positions)
         self.teammate_belief_logit_map  = nn.Linear(hidden_state_size, possible_positions)
 
-    def init_state(self, batch_size):
+    def init_state(self, batch_size = 1):
         hidden_state    = torch.zeros(batch_size, self.hidden_state_size, device = self.device) 
         cell_state      = torch.zeros(batch_size, self.hidden_state_size, device = self.device) 
         return hidden_state, cell_state
@@ -33,7 +33,7 @@ class LSTM(nn.Module):
 
         return new_hidden_state, new_cell_state, evader_logits, teammate_logits  
     
-    def freeze(self):
+    def stop(self):
         self.requires_grad_(False)
         self.eval()
 
