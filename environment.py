@@ -72,7 +72,7 @@ class Game:
         self.observed_actions_since_last_turn(agent_id, agent.position, old_position)
 
 def Create_Game(size, t_max, seed):
-    random.seed(seed)
+    #random.seed(seed)
 
     def random_starting_position(size):
         positions = [(row, column) for row in range(size) for column in range(size)]
