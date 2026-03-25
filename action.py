@@ -95,3 +95,45 @@ def knowledge_based_action(agent_id, games, dqn, epsilon, states, knowledge_mode
         return results
     #return agent_position, action, evader_probabilities[0].detach().cpu().numpy(), teammate_probabilities[0].detach().cpu().numpy(), state
 
+
+
+def knowledge_based_action_bob(agent_id, games, dqn, epsilon, states, knowledge_model):
+    with torch.no_grad():
+        agent_positions             = []
+        valid_moves                 = []
+        for game in games: 
+            agent_position  = game.agents[agent_id].position
+
+            agent_positions.append(agent_position)
+            valid_moves.append(game.valid_moves(agent_position))        
+
+        observation = [get_observation(agent_id, game, delete_observed_actions_since_last_turn_array=True) for game in games]
+        observation = torch.stack(observation, dim=0)
+
+        hidden_state_0 = torch.cat([state[0] for state in states], dim=0)
+        cell_state_0   = torch.cat([state[1] for state in states], dim=0)
+
+        hidden_state_1, cell_state_1, evader_logits, teammate_logits = knowledge_model(observation, hidden_state_0, cell_state_0)
+
+
+        evader_probabilities    = torch.softmax(evader_logits, dim=1)
+        teammate_probabilities  = torch.softmax(teammate_logits, dim=1)
+
+        q = dqn(evader_probabilities, teammate_probabilities, agent_positions)
+        results = []
+        for i in range(len(games)):
+            valid = valid_moves[i]
+            if random.random() < epsilon:
+                action = random.choice(valid)
+            else:
+                best_action = valid[0]
+                best_value  = float("-inf")
+                for action in valid:
+                    value = q[i, Action_to_Index[action]].item()
+                    if value > best_value:
+                        best_value  = value
+                        best_action = action
+                action = best_action
+            results.append((action, hidden_state_1[i:i+1], cell_state_1[i:i+1], evader_logits[i], teammate_logits[i]))
+        return results
+  

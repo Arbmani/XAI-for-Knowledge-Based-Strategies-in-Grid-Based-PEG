@@ -52,3 +52,7 @@ class DQN(nn.Module):
         position_hidden         = self.position_to_hidden(agent_position)
 
         return self.q_values(torch.cat([evader_hidden, teammate_hidden, position_hidden], dim=1))
+
+    def stop(self):
+        self.requires_grad_(False)
+        self.eval()

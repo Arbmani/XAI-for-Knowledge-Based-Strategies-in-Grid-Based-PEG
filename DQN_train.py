@@ -127,7 +127,7 @@ def train(strategy):
     size                    = 15
     t_max                   = 50
     seed                    = 1
-    simulations             = 30_000
+    simulations             = 100_000
     dqn_hidden_size         = 96
 
 
@@ -136,12 +136,12 @@ def train(strategy):
     step_weight             = 6
     capture_bonus           = 250
     no_capture_loss         = -450
-    update_every_t_steps    = 2
+    update_every_t_steps    = 4
     min_weight, max_weight, surrond_weight = 1.0, 0.4, 1.4
     capture_weight          = 4.0
 
-    batch_size              = 64
-    number_of_games         = 125
+    batch_size              = 25
+    number_of_games         = 25
 
     mem_size                = 100_000
     mem_start               = 5_000
@@ -150,7 +150,7 @@ def train(strategy):
 
     epsilon  = 1
     epsilon_min     = 0.05
-    epsilon_decay   = 0.9998
+    epsilon_decay   = 0.99998
 
     number_of_updates   = 0
     copy_to_target      = 1_000
@@ -436,5 +436,5 @@ def train(strategy):
 
 
 if __name__ == "__main__":
-    #train("lstm")
+    train("lstm")
     train("kbu")
