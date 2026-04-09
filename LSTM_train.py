@@ -191,7 +191,7 @@ if __name__ == "__main__":
             p1_lstm_opt.step()
             p2_lstm_opt.step()
 
-            if b % 50 == 0:
+            if b % 250 == 0:
                 print(f"Batch:{b}/{batches}, P1 loss was :{p1_loss}, P2 loss was: {p2_loss}")
 
         p1_lstm.stop()

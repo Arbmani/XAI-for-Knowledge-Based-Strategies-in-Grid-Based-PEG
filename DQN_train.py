@@ -28,13 +28,15 @@ class Experiance_Replay:
         self.teammate_probabilities_memory_t1   = np.zeros((self.max_size, self.possible_positions), dtype=np.float32)
 
         self.action_memory                      = np.zeros(self.max_size, dtype=np.int64)    
-        self.reward_memory                      = np.zeros(self.max_size, dtype=np.float32)   
-        self.terminal                           = np.zeros(self.max_size, dtype=np.int64)       
+        self.reward_memory                      = np.zeros(self.max_size, dtype=np.float32)    
+        self.terminal                           = np.zeros(self.max_size, dtype=np.int64)    
+        self.time_left1                          = np.zeros(self.max_size, dtype=np.float32)   
+        self.time_left2                          = np.zeros(self.max_size, dtype=np.float32) 
 
         self.index          = 0
         self.current_size   = 0
 
-    def add_transition(self, evader_probabilities_t0, teammate_probabilities_t0, agent_position_t0, evader_probabilities_t1, teammate_probabilities_t1, action, reward, terminal):
+    def add_transition(self, evader_probabilities_t0, teammate_probabilities_t0, agent_position_t0, evader_probabilities_t1, teammate_probabilities_t1, action, reward, terminal, time_left1, time_left2):
         self.evader_probabilities_memory_t0[self.index]     = evader_probabilities_t0
         self.teammate_probabilities_memory_t0[self.index]   = teammate_probabilities_t0
         self.agent_position_memory_t0[self.index]           = agent_position_t0
@@ -43,6 +45,8 @@ class Experiance_Replay:
         self.action_memory[self.index]                      = action
         self.reward_memory[self.index]                      = reward
         self.terminal[self.index]                           = terminal
+        self.time_left1[self.index]                          = time_left1
+        self.time_left2[self.index]                          = time_left2
 
         self.index = (self.index + 1) % self.max_size
         self.current_size  = min(self.current_size + 1, self.max_size)
@@ -62,6 +66,8 @@ class Experiance_Replay:
             torch.tensor(self.action_memory[random_transitions], dtype=torch.long, device=device),
             torch.tensor(self.reward_memory[random_transitions], dtype=torch.float32, device=device),
             torch.tensor(self.terminal[random_transitions], dtype=torch.float32, device=device),
+            torch.tensor(self.time_left1[random_transitions], dtype=torch.float32, device=device),
+            torch.tensor(self.time_left2[random_transitions], dtype=torch.float32, device=device),
         )
 
 
@@ -73,6 +79,7 @@ class state:
     agent_action        : float  
     reward              : float 
     terminal            : bool
+    time_left           : float
 
 
 # made for games of size 15
@@ -96,9 +103,11 @@ def loss(dqn, target_dqn, transitions, gamma):
      teammate_probabilities_t1s,
      actions,
      rewards,
-     terminal) = transitions
+     terminal,
+     time_left1,
+     time_left2) = transitions
 
-    q_values_t0         = dqn(evader_probabilities_t0s, teammate_probabilities_t0s, agent_position_t0s)
+    q_values_t0         = dqn(evader_probabilities_t0s, teammate_probabilities_t0s, agent_position_t0s, time_left1)
     action_value        = q_values_t0.gather(1, actions.unsqueeze(1)).squeeze(1)
 
     target = rewards.clone()
@@ -107,8 +116,8 @@ def loss(dqn, target_dqn, transitions, gamma):
     with torch.no_grad():
         if nonterminal.any().item():
             agent_position_t1s  = agent_position_t0s[nonterminal] + Index_to_Action_tensor[actions[nonterminal]]
-            q_values_t1 = dqn(evader_probabilities_t1s[nonterminal], teammate_probabilities_t1s[nonterminal], agent_position_t1s)
-            q_values_target_t1 = target_dqn(evader_probabilities_t1s[nonterminal], teammate_probabilities_t1s[nonterminal], agent_position_t1s)
+            q_values_t1 = dqn(evader_probabilities_t1s[nonterminal], teammate_probabilities_t1s[nonterminal], agent_position_t1s, time_left2[nonterminal])
+            q_values_target_t1 = target_dqn(evader_probabilities_t1s[nonterminal], teammate_probabilities_t1s[nonterminal], agent_position_t1s, time_left2[nonterminal])
 
             legal_mask = mask_illegals(agent_position_t1s) 
             q_values_t1 = q_values_t1.masked_fill(~legal_mask, -1e12)
@@ -127,37 +136,40 @@ def train(strategy):
     size                    = 15
     t_max                   = 50
     seed                    = 1
-    simulations             = 100_000
-    dqn_hidden_size         = 96
+    simulations             = 150_000
+    dqn_hidden_size         = 64
 
 
     learning_rate           = 3e-4
     gamma                   = 0.97
     step_weight             = 6
-    capture_bonus           = 250
-    no_capture_loss         = -450
+    capture_bonus           = 500
+
+    no_capture_loss         = -5000
     update_every_t_steps    = 4
-    min_weight, max_weight, surrond_weight = 1.0, 0.4, 1.4
+
     capture_weight          = 4.0
 
-    batch_size              = 25
-    number_of_games         = 25
+    batch_size              = 64
+    number_of_games         = 32
 
-    mem_size                = 100_000
+    mem_size                = 150_000
     mem_start               = 5_000
     possible_positions      = size*size
     
 
     epsilon  = 1
     epsilon_min     = 0.05
-    epsilon_decay   = 0.99998
+    epsilon_decay   = 0.99995
 
     number_of_updates   = 0
-    copy_to_target      = 1_000
+    copy_to_target      = 2_000
 
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
+
+
 
     p1_dqn = DQN(dqn_hidden_size, possible_positions, device).to(device)
     p1_dqn_target = DQN(dqn_hidden_size, possible_positions, device).to(device)
@@ -190,54 +202,21 @@ def train(strategy):
         p1_knowledge_model = KBU(size)
         p2_knowledge_model = KBU(size) 
 
-    def manhattan(agent_1, agent_2):
-        return abs(agent_1[0] - agent_2[0]) + abs(agent_1[1] - agent_2[1])
     
-    def surrond(e1_position, p1_position, p2_position): 
-        row     = 1.0 if ((p1_position[0] - e1_position[0]) * (p2_position[0] - e1_position[0])) < 0 else 0.0
-        column  = 1.0 if ((p1_position[1] - e1_position[1]) * (p2_position[1] - e1_position[1])) < 0 else 0.0
-        return row + column
-    def distance_value(game):
-        e1_position    = game.agents["E1"].position
-        p1_position    = game.agents["P1"].position   
-        p2_position    = game.agents["P2"].position 
-
-        p1_distance = manhattan(p1_position, e1_position)
-        p2_distance = manhattan(p2_position, e1_position)
-
-        min_distance = min(p1_distance, p2_distance)
-        max_distance = max(p1_distance, p2_distance)
-
-        return min_weight*min_distance + max_weight*max_distance - surrond_weight * (surrond(e1_position, p1_position, p2_position))
-
-    def reward_func(old_distance_value, game, step_count):
-
-        steps_left = step_count / max(1, 2*t_max -1)
-        reward = -(1 + 5*steps_left)
-        reward += step_weight * (old_distance_value - distance_value(game))
-
-        captured    = game.is_evader_captured()
-        max_steps   = step_count >= 2 * t_max  
-
-        done = captured or max_steps
-        return reward, done
 
 
 
 
-    #def pursuer_min_distance_to_evader(game):
-    #    p1_position = game.agents["P1"].position
-    #    p2_position = game.agents["P2"].position
-    #    e1_position = game.agents["E1"].position
-    #    def manhattan(pursuer, evader):
-    #        return abs(pursuer[0] - evader[0]) + abs(pursuer[1] - evader[1])
-    #    return min(manhattan(p1_position, e1_position), manhattan(p2_position, e1_position))
 
     games                   = [None]  * number_of_games
     p1_knowledge_states     = [None]  * number_of_games
     p2_knowledge_states     = [None]  * number_of_games
     p1_states0              = [None]  * number_of_games
     p2_states0              = [None]  * number_of_games
+
+    p1_states1_t              = [None]  * number_of_games
+    p2_states1_t              = [None]  * number_of_games
+
     steps                   = [0]     * number_of_games
     captured                = [False] * number_of_games
 
@@ -250,6 +229,7 @@ def train(strategy):
     p2_action               = [None]  * number_of_games
     p2_evader_probability   = [None]  * number_of_games
     p2_teammate_probability = [None]  * number_of_games
+    simulation_id           = [None]  * number_of_games
 
     simulation              = 0
     completed_simulations   = 0
@@ -258,7 +238,33 @@ def train(strategy):
     average_steps       = 0
 
     added_transitions = 0
+    def reward_func(game, agent_id):
+        if game.is_evader_captured():
+            return 0.0
+    
+        e  = game.agents["E1"].position
+        p1 = game.agents["P1"].position
+        p2 = game.agents["P2"].position
+    
+        d1 = abs(p1[0] - e[0]) + abs(p1[1] - e[1])
+        d2 = abs(p2[0] - e[0]) + abs(p2[1] - e[1])
 
+        if agent_id is not None:
+            if agent_id == "P1":
+                d2 = d2 * 0.5
+            elif agent_id == "P2":
+                d1 = d1 * 0.5
+            else: 
+                print("Error")
+        
+        return 0
+        return (
+            -(d1 + d2)         
+        )
+    
+
+    p1_old_dist                   = [None]  * number_of_games
+    p2_old_dist                   = [None]  * number_of_games
 
     def new_game(index):
         nonlocal simulation
@@ -267,8 +273,13 @@ def train(strategy):
         p2_knowledge_states[index] = p2_knowledge_model.init_state()
         p1_states0[index] = None
         p2_states0[index] = None
+
+        p1_states1_t[index] = None
+        p2_states1_t[index] = None
+
         steps[index]      = 0    
         captured[index]   = False
+        simulation_id[index] = simulation
         simulation += 1
 
     def add_transition_helper(memory, state0, state1):
@@ -283,20 +294,22 @@ def train(strategy):
                         teammate_probabilities_t1  = state1.teammate_probability,
                         action                     = state0.agent_action, 
                         reward                     = state0.reward, 
-                        terminal                   = state0.terminal)
+                        terminal                   = state0.terminal,
+                        time_left1                  = state0.time_left,
+                        time_left2                  = state1.time_left,)
         added_transitions += 1
-        if p1_memory.start_sampleing() and added_transitions % update_every_t_steps == 0 and added_transitions > 0:
+        if p1_memory.start_sampleing() and p2_memory.start_sampleing() and added_transitions % update_every_t_steps == 0 and added_transitions > 0:
             p1_loss = loss(p1_dqn, p1_dqn_target, p1_memory.sample(batch_size), gamma)
             p1_dqn_opt.zero_grad()
             p1_loss.backward()
             torch.nn.utils.clip_grad_norm_(p1_dqn.parameters(), 5.0)
             p1_dqn_opt.step()
-            if p2_memory.start_sampleing():
-                p2_loss = loss(p2_dqn, p2_dqn_target, p2_memory.sample(batch_size), gamma)
-                p2_dqn_opt.zero_grad()
-                p2_loss.backward()
-                torch.nn.utils.clip_grad_norm_(p2_dqn.parameters(), 5.0)
-                p2_dqn_opt.step()
+
+            p2_loss = loss(p2_dqn, p2_dqn_target, p2_memory.sample(batch_size), gamma)
+            p2_dqn_opt.zero_grad()
+            p2_loss.backward()
+            torch.nn.utils.clip_grad_norm_(p2_dqn.parameters(), 5.0)
+            p2_dqn_opt.step()
             number_of_updates += 1
             if number_of_updates % copy_to_target == 0:
                 p1_dqn_target.load_state_dict(p1_dqn.state_dict())
@@ -308,14 +321,21 @@ def train(strategy):
         nonlocal average_steps
         nonlocal epsilon
 
+
         if p1_states0[index] is not None:
+            if p1_states1_t[index] is not None and p1_states0[index].time_left != p1_states1_t[index].time_left:
+                add_transition_helper(p1_memory, p1_states1_t[index], p1_states0[index])
+
             terminal_state          = copy(p1_states0[index])
-            terminal_state.reward   += extra_reward
+            terminal_state.reward   = extra_reward
             terminal_state.terminal = True
             add_transition_helper(p1_memory, terminal_state, terminal_state)
         if p2_states0[index] is not None:
+            if p2_states1_t[index] is not None and p2_states0[index].time_left != p2_states1_t[index].time_left:
+                add_transition_helper(p2_memory, p2_states1_t[index], p2_states0[index])
+
             terminal_state          = copy(p2_states0[index])
-            terminal_state.reward   += extra_reward
+            terminal_state.reward   = extra_reward
             terminal_state.terminal = True
             add_transition_helper(p2_memory, terminal_state, terminal_state)
 
@@ -341,7 +361,7 @@ def train(strategy):
         running_indexes = [i for i in range(number_of_games) if games[i] is not None]
         running_games   = [games[i] for i in running_indexes]
 
-        p1_results = knowledge_based_action("P1", running_games, p1_dqn, epsilon, [p1_knowledge_states[i] for i in running_indexes] if lstm else [None]*len(running_indexes),  p1_knowledge_model, lstm)
+        p1_results = knowledge_based_action("P1", running_games, p1_dqn, epsilon, [p1_knowledge_states[i] for i in running_indexes] if lstm else [None]*len(running_indexes),  p1_knowledge_model, lstm, [steps[i] / (2 * t_max) for i in running_indexes])
         p2_running_indexes = []
 
         for index, running_index in enumerate(running_indexes):
@@ -351,26 +371,32 @@ def train(strategy):
              p1_teammate_probability[running_index], 
              p1_knowledge_states[running_index]
              )  = p1_results[index]
+            p1_old_dist[running_index] = reward_func(games[running_index], "P1")
 
-            old_distance_value = distance_value(games[running_index])
 
             steps[running_index]                += 1
             games[running_index].agent_move("P1", p1_action[running_index])
-            p1_reward, terminal = reward_func(old_distance_value, games[running_index], steps[running_index])
+
+
+
             captured[running_index] = games[running_index].is_evader_captured()
+            terminal = captured[running_index] or (steps[running_index] >= 2 * t_max)
             p1_states1 = state(
                                 evader_probability  = p1_evader_probability[running_index],
                                 teammate_probability= p1_teammate_probability[running_index],
                                 agent_position      = p1_agent_position[running_index],
                                 agent_action        = Action_to_Index[p1_action[running_index]],
-                                reward              = p1_reward,
-                                terminal            = terminal)
+                                reward              = -10 + 10 * (gamma * reward_func(games[running_index], agent_id="P1") - p1_old_dist[running_index]),
+                                terminal            = terminal,
+                                time_left           = (steps[running_index] / (2 * t_max)))
             if p1_states0[running_index] is not None:
-                add_transition_helper(p1_memory, p1_states0[running_index], p1_states1)
-            p1_states0[running_index] = p1_states1 
+            #    add_transition_helper(p1_memory, p1_states0[running_index], p1_states1)
+                p1_states1_t[running_index]  = copy(p1_states0[running_index])
+            p1_states0[running_index]  = p1_states1
+
             if terminal:
                 if captured[running_index]:
-                    terminal_helper(running_index, capture_bonus - capture_weight * steps[running_index])
+                    terminal_helper(running_index, capture_bonus + 15 *(2*t_max - steps[running_index]))
                 else:
                     terminal_helper(running_index, no_capture_loss)
             else:
@@ -379,13 +405,14 @@ def train(strategy):
 
         if p2_running_indexes:
             p2_running_games   = [games[i] for i in p2_running_indexes]
-            p2_results = knowledge_based_action("P2", p2_running_games, p2_dqn, epsilon, [p2_knowledge_states[i] for i in p2_running_indexes] if lstm else [None]*len(p2_running_indexes), p2_knowledge_model, lstm)
+            p2_results = knowledge_based_action("P2", p2_running_games, p2_dqn, epsilon, [p2_knowledge_states[i] for i in p2_running_indexes] if lstm else [None]*len(p2_running_indexes), p2_knowledge_model, lstm, [steps[i] / (2 * t_max) for i in p2_running_indexes])
         else:
             p2_results = []
         
         evader_running_index = []
 
         for index, running_index in enumerate(p2_running_indexes):
+            p2_old_dist[running_index] = reward_func(games[running_index], "P2")
             (p2_agent_position[running_index], 
              p2_action[running_index], 
              p2_evader_probability[running_index], 
@@ -393,26 +420,30 @@ def train(strategy):
              p2_knowledge_states[running_index]
              ) = p2_results[index]
             
-            old_distance_value = distance_value(games[running_index])
 
             steps[running_index] += 1
             games[running_index].agent_move("P2", p2_action[running_index])
-            p2_reward, terminal = reward_func(old_distance_value, games[running_index], steps[running_index])
+
+
             captured[running_index] = games[running_index].is_evader_captured() 
+            terminal = captured[running_index] or (steps[running_index] >= 2 * t_max)
             p2_states1 = state(
                     evader_probability  = p2_evader_probability[running_index],
                     teammate_probability= p2_teammate_probability[running_index],
                     agent_position      = p2_agent_position[running_index],
                     agent_action        = Action_to_Index[p2_action[running_index]],
-                    reward              = p2_reward,
-                    terminal            = terminal)
+                    reward              = -10 + 10 * (gamma * reward_func(games[running_index], agent_id="P2") - p2_old_dist[running_index]),
+                    terminal            = terminal,
+                    time_left           = (steps[running_index] / (2 * t_max)))
             if p2_states0[running_index] is not None:
-                add_transition_helper(p2_memory, p2_states0[running_index], p2_states1)
+            #    add_transition_helper(p2_memory, p2_states0[running_index], p2_states1)
+                p2_states1_t[running_index] = copy(p2_states0[running_index])
             p2_states0[running_index] = p2_states1
+
 
             if terminal:
                 if captured[running_index]:
-                    terminal_helper(running_index, capture_bonus - capture_weight * steps[running_index])
+                    terminal_helper(running_index, capture_bonus + 15 *(2*t_max - steps[running_index]))
                 else:
                     terminal_helper(running_index, no_capture_loss)
             else:
@@ -422,10 +453,17 @@ def train(strategy):
             game.agent_move("E1", random.choice(game.valid_moves(game.agents["E1"].position)))
             captured[index] = game.is_evader_captured()
             if captured[index]:
-                terminal_helper(index, capture_bonus - capture_weight * steps[index])
+                terminal_helper(index, capture_bonus + 15 *(2*t_max - steps[index]))
             elif steps[index] >= 2 * t_max:
                 terminal_helper(index, no_capture_loss)
-            
+            else:
+                p1_states0[index].reward = -0.1 + 0.1 * (gamma * reward_func(games[index], agent_id="P1") - p1_old_dist[index])
+                p2_states0[index].reward = -0.1 + 0.1 * (gamma * reward_func(games[index], agent_id="P2") - p2_old_dist[index])
+                if p1_states1_t[index] is not None:
+
+                    add_transition_helper(p1_memory, p1_states1_t[index], p1_states0[index])
+                    add_transition_helper(p2_memory, p2_states1_t[index], p2_states0[index])
+
             
             
 
@@ -437,4 +475,4 @@ def train(strategy):
 
 if __name__ == "__main__":
     train("lstm")
-    train("kbu")
+    #train("kbu")

@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import random 
 import torch.nn.functional as F
-from action import device, knowledge_based_action_bob
+from action import device, knowledge_based_action_bob, get_observation
 
 from environment import Create_Game
 
@@ -40,24 +40,36 @@ class Batch_Memory:
         self.evader_belief_logit_map            = torch.zeros((self.max_size, self.possible_positions),     dtype=torch.float32, device=device)
         self.teammate_belief_logit_map          = torch.zeros((self.max_size, self.possible_positions),     dtype=torch.float32, device=device)
         self.first_hidden_state                 = torch.zeros((self.max_size, self.first_hidden_state_size),dtype=torch.float32, device=device)
+        self.first_cell_state                   = torch.zeros((self.max_size, self.first_hidden_state_size),dtype=torch.float32, device=device)
        
+        self.time_left                               = torch.zeros((self.max_size,),     dtype=torch.float32, device=device)
+
+
+
         self.teammate_evader_belief_logit_map   = torch.zeros((self.max_size, self.possible_positions),     dtype=torch.float32, device=device)
         self.teammate_teammate_belief_logit_map = torch.zeros((self.max_size, self.possible_positions),     dtype=torch.float32, device=device)
 
-        self.mask                               = torch.zeros((self.max_size,),     dtype=bool, device=device)
+        self.observation                        = torch.zeros((self.max_size, 8),                           dtype=torch.float32, device=device)
+
+        self.mask                               = torch.zeros((self.max_size,),     dtype=torch.bool, device=device)
 
 
         self.index                              = 0
 
 
-    def add_state(self, observed_teammate_actions, evader_belief_logit_map, teammate_belief_logit_map, first_hidden_state, teammate_evader_belief_logit_map, teammate_teammate_belief_logit_map):
+    def add_state(self, observation, observed_teammate_actions, evader_belief_logit_map, teammate_belief_logit_map, first_hidden_state, first_cell_state, teammate_evader_belief_logit_map, teammate_teammate_belief_logit_map, time_left):
         self.observed_teammate_actions[self.index]          = observed_teammate_actions
         self.evader_belief_logit_map[self.index]            = evader_belief_logit_map.squeeze(0)
         self.teammate_belief_logit_map[self.index]          = teammate_belief_logit_map.squeeze(0)
         self.first_hidden_state[self.index]                 = first_hidden_state.squeeze(0)
-        
+        self.first_cell_state[self.index]                   = first_cell_state.squeeze(0)
+
         self.teammate_evader_belief_logit_map[self.index]   = teammate_evader_belief_logit_map.squeeze(0)
         self.teammate_teammate_belief_logit_map[self.index] = teammate_teammate_belief_logit_map.squeeze(0)
+        self.observation[self.index]                        = observation.squeeze(0)
+
+        self.time_left[self.index]                          = time_left
+
 
         self.mask[self.index] = True                               
 
@@ -65,38 +77,47 @@ class Batch_Memory:
 
     def get_sequence(self):
         return (
+            self.observation,
             self.observed_teammate_actions,
             self.evader_belief_logit_map,
             self.teammate_belief_logit_map,
             self.first_hidden_state,
+            self.first_cell_state,
             self.teammate_evader_belief_logit_map,
             self.teammate_teammate_belief_logit_map,
-            self.mask)
+            self.mask,
+            self.time_left)
         
 
 def loss(new_knowledge_model, new_knowledge_model_opt, batch):
     batch_size = len(batch)
     t_max = 50
 
-    (observed_teammate_actions_batch, 
+    (observation,
+     observed_teammate_actions_batch, 
      evader_belief_logit_map_batch, 
      teammate_belief_logit_map_batch,
      first_hidden_state_batch,
+     first_cell_state_batch,
      teammate_evader_belief_logit_map_batch,
      teammate_teammate_belief_logit_map_batch,
-     mask_batch) = [torch.stack(bat, dim=0) for bat in zip(*batch)]
-
+     mask_batch,
+     time_left) = [torch.stack(bat, dim=0) for bat in zip(*batch)]
+    new_knowledge_model_opt.zero_grad(set_to_none=True)
     hidden_state, cell_state = new_knowledge_model.init_state(batch_size)
     total_loss = 0.0
     total_count = mask_batch.sum()
     for t in range(t_max):
         hidden_state, cell_state, teammate_evader_logit, teammate_teammate_logit = new_knowledge_model(
+            observation[:,t],
             observed_teammate_actions_batch[:,t],
             evader_belief_logit_map_batch[:,t],
             teammate_belief_logit_map_batch[:,t],
             first_hidden_state_batch[:,t],
+            first_cell_state_batch[:,t],
             hidden_state,
             cell_state,
+            time_left[:,t],
         )
 
         teammate_evader_belief_loss = F.kl_div(
@@ -117,18 +138,31 @@ def loss(new_knowledge_model, new_knowledge_model_opt, batch):
     total_loss.backward()
     new_knowledge_model_opt.step()
 
-    return total_loss
+    return total_loss.item()
     
+from dataclasses import dataclass
+@dataclass
+class state:
+    observation                         : torch.Tensor
+    observed_teammate_actions           : torch.Tensor
+    evader_belief_logit_map             : torch.Tensor
+    teammate_belief_logit_map           : torch.Tensor 
+    first_hidden_state                  : torch.Tensor
+    first_cell_state                    : torch.Tensor
+    teammate_evader_belief_logit_map    : torch.Tensor
+    teammate_teammate_belief_logit_map  : torch.Tensor
+    time_left                           : torch.Tensor
 
 
 def train(Agent):
     size                    = 15
     t_max                   = 50
-    seed                    = 1
-    simulations             = 30_000
+    seed                    = 591942432
+    simulations             = 1_000_000 # First order lstm was trained on 50 000 batches where each batch was of size 250 games 
+                                         # 50_000 * 250 = 12_500_000
     
     dqn_hidden_size         = 96
-    new_lstm_hidden_size    = 192
+    new_lstm_hidden_size    = 128
 
     learning_rate           = 1e-4
 
@@ -170,10 +204,8 @@ def train(Agent):
     games                   = [None]  * number_of_games
 
     p1_states               = [None]  * number_of_games
-    p1_believes             = [None]  * number_of_games
 
     p2_states               = [None]  * number_of_games
-    p2_believes             = [None]  * number_of_games
 
     steps                   = [0]     * number_of_games
     captured                = [False] * number_of_games
@@ -193,12 +225,9 @@ def train(Agent):
         nonlocal simulation
         games[index] = Create_Game(size, t_max, seed+simulation)
 
-        uni = torch.zeros((possible_positions,), dtype=torch.float32, device=device)
-
         p1_states[index]    = p1_knowledge_model.init_state()
-        p1_believes[index]  = (uni.clone(), uni.clone())
         p2_states[index]    = p2_knowledge_model.init_state()
-        p2_believes[index]  = (uni.clone(), uni.clone())
+
         sequence[index]    = Batch_Memory(t_max, possible_positions, observation_size=3, first_hidden_state_size=96)
 
         steps[index]      = 0    
@@ -210,8 +239,8 @@ def train(Agent):
         nonlocal captured_counter 
         nonlocal number_of_updates
         nonlocal losses
-        if sequence[index].index > 0:
-            sequences.add_sequence(sequence[index].get_sequence())
+
+        sequences.add_sequence(sequence[index].get_sequence())
         while(sequences.ready()):
             batch = sequences.get_batch()
 
@@ -249,29 +278,42 @@ def train(Agent):
         running_indexes = [i for i in range(number_of_games) if games[i] is not None]
         running_games   = [games[i] for i in running_indexes]
 
-        p1_observed_actions = [game.observe("P1", False)[1] for game in running_games]
+        p1_observed_actions = [games[i].observe("P1", False)[1] for i in running_indexes]
         running_p1_states   = [p1_states[i] for i in running_indexes]
-        p1_results = knowledge_based_action_bob("P1", running_games, p1_dqn, epsilon, running_p1_states,  p1_knowledge_model)
+        p1_results = knowledge_based_action_bob("P1", running_games, p1_dqn, epsilon, running_p1_states,  p1_knowledge_model, [steps[i] / (2 * t_max) for i in running_indexes])
         p2_running_indexes = []
+
+        state0 = None
+
 
         for index, running_index in enumerate(running_indexes):
             (action, 
              hidden_state, 
              cell_state,
              evader_logits, 
-             teammate_logits)  = p1_results[index]
+             teammate_logits,
+             observation)  = p1_results[index]
             
             p1_states[running_index]    = (hidden_state, cell_state)
-            p1_believes[running_index]  = (evader_logits, teammate_logits)
 
             if Agent == "p1":
+
+                observation_p2 = get_observation("P2", games[running_index], delete_observed_actions_since_last_turn_array=False, get_action=False)
+                temp_hidden_state   = p2_states[running_index][0]
+                temp_cell_state     = p2_states[running_index][1]
+                _, _, first_evader_logits, first_teammate_logits = p2_knowledge_model(
+                    observation_p2.unsqueeze(0), temp_hidden_state, temp_cell_state)
+        
                 sequence[running_index].add_state(
+                    observation                         = observation,
                     observed_teammate_actions           = get_action("P1", p1_observed_actions[index]), 
                     evader_belief_logit_map             = evader_logits, 
                     teammate_belief_logit_map           = teammate_logits, 
                     first_hidden_state                  = hidden_state, 
-                    teammate_evader_belief_logit_map    = p2_believes[running_index][0], 
-                    teammate_teammate_belief_logit_map  = p2_believes[running_index][1])           
+                    first_cell_state                    = cell_state, 
+                    teammate_evader_belief_logit_map    = first_evader_logits, 
+                    teammate_teammate_belief_logit_map  = first_teammate_logits,
+                    time_left                           = (steps[running_index] / (2 * t_max)))           
 
 
             steps[running_index]                += 1
@@ -288,9 +330,9 @@ def train(Agent):
 
         if p2_running_indexes:
             p2_running_games    = [games[i] for i in p2_running_indexes]
-            p2_observed_actions = [game.observe("P2", False)[1] for game in p2_running_games]
+            p2_observed_actions = [games[i].observe("P2", False)[1] for i in p2_running_indexes]
             running_p2_states   = [p2_states[i] for i in p2_running_indexes]
-            p2_results = knowledge_based_action_bob("P2", p2_running_games, p2_dqn, epsilon, running_p2_states, p2_knowledge_model)
+            p2_results = knowledge_based_action_bob("P2", p2_running_games, p2_dqn, epsilon, running_p2_states, p2_knowledge_model, [steps[i] / (2 * t_max) for i in p2_running_indexes])
         else:
             p2_results = []
         
@@ -300,20 +342,29 @@ def train(Agent):
             (action, 
              hidden_state, 
              cell_state,
-             evader_logits, 
-             teammate_logits)  = p2_results[index]
+             evader_logits,
+             teammate_logits,
+             observation)  = p2_results[index]
             
             p2_states[running_index]    = (hidden_state, cell_state)
-            p2_believes[running_index]  = (evader_logits, teammate_logits)
 
             if Agent == "p2":
+                temp_hidden_state   = p1_states[running_index][0]
+                temp_cell_state     = p1_states[running_index][1]
+                observation_p1      = get_observation("P1", games[running_index], delete_observed_actions_since_last_turn_array=False, get_action=False)
+                _, _, first_evader_logits, first_teammate_logits = p1_knowledge_model(
+                    observation_p1.unsqueeze(0), temp_hidden_state, temp_cell_state)
+
                 sequence[running_index].add_state(
+                    observation                         = observation,
                     observed_teammate_actions           = get_action("P2", p2_observed_actions[index]), 
                     evader_belief_logit_map             = evader_logits, 
                     teammate_belief_logit_map           = teammate_logits, 
                     first_hidden_state                  = hidden_state, 
-                    teammate_evader_belief_logit_map    = p1_believes[running_index][0], 
-                    teammate_teammate_belief_logit_map  = p1_believes[running_index][1])  
+                    first_cell_state                    = cell_state, 
+                    teammate_evader_belief_logit_map    = first_evader_logits, 
+                    teammate_teammate_belief_logit_map  = first_teammate_logits,
+                    time_left                           = (steps[running_index] / (2 * t_max)))  
 
 
             steps[running_index] += 1
