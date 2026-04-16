@@ -158,11 +158,11 @@ def train(Agent):
     size                    = 15
     t_max                   = 50
     seed                    = 591942432
-    simulations             = 1_000_000 # First order lstm was trained on 50 000 batches where each batch was of size 250 games 
+    simulations             = 6_000_000  # First order lstm was trained on 50 000 batches where each batch was of size 250 games 
                                          # 50_000 * 250 = 12_500_000
     
     dqn_hidden_size         = 96
-    new_lstm_hidden_size    = 128
+    new_lstm_hidden_size    = 256
 
     learning_rate           = 1e-4
 
@@ -190,15 +190,15 @@ def train(Agent):
     p2_dqn.load_state_dict(torch.load(Agent + "_dqn_lstm.pt", map_location=device))
     p2_dqn.stop()
 
-    p1_knowledge_model = LSTM(hidden_state_size = 96, possible_positions = possible_positions, device=device).to(device)
-    p1_knowledge_model.load_state_dict(torch.load(Agent + "_lstm96.pt", map_location = device))
-    p2_knowledge_model = LSTM(hidden_state_size = 96, possible_positions = possible_positions, device=device).to(device)
-    p2_knowledge_model.load_state_dict(torch.load(Agent + "_lstm96.pt", map_location = device))
+    p1_knowledge_model = LSTM(hidden_state_size = 256, possible_positions = possible_positions, device=device).to(device)
+    p1_knowledge_model.load_state_dict(torch.load(Agent + "_lstm256.pt", map_location = device))
+    p2_knowledge_model = LSTM(hidden_state_size = 256, possible_positions = possible_positions, device=device).to(device)
+    p2_knowledge_model.load_state_dict(torch.load(Agent + "_lstm256.pt", map_location = device))
 
     p1_knowledge_model.stop()
     p2_knowledge_model.stop()
     # def __init__(self, first_hidden_state_size, hidden_state_size, possible_positions, device):
-    new_knowledge_model = LSTM_BOB(first_hidden_state_size=96, hidden_state_size=new_lstm_hidden_size, possible_positions=possible_positions, device=device).to(device)
+    new_knowledge_model = LSTM_BOB(first_hidden_state_size=256, hidden_state_size=new_lstm_hidden_size, possible_positions=possible_positions, device=device).to(device)
     new_knowledge_model_opt = torch.optim.AdamW(new_knowledge_model.parameters(), lr=learning_rate)
 
     games                   = [None]  * number_of_games
@@ -228,7 +228,7 @@ def train(Agent):
         p1_states[index]    = p1_knowledge_model.init_state()
         p2_states[index]    = p2_knowledge_model.init_state()
 
-        sequence[index]    = Batch_Memory(t_max, possible_positions, observation_size=3, first_hidden_state_size=96)
+        sequence[index]    = Batch_Memory(t_max, possible_positions, observation_size=3, first_hidden_state_size=256)
 
         steps[index]      = 0    
         captured[index]   = False

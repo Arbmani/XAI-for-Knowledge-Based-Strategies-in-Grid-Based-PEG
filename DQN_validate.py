@@ -2,8 +2,11 @@ import numpy as np
 import torch
 import random 
 import torch.nn.functional as F
-from action import device, knowledge_based_action_bob_dqn, knowledge_based_action
+from action import device, knowledge_based_action_bob_dqn, knowledge_based_action, get_observation
 from dataclasses import dataclass
+
+from interpretable_strategy_P1_first_order import interpretable_action as ia1
+from interpretable_strategy_P2_first_order import interpretable_action as ia2
 
 from environment import Create_Game, Action_to_Index
 from copy import copy
@@ -72,30 +75,30 @@ def validate(strategy):
         p2_dqn.eval()
 
 
-        p1_first_knowledge_model = LSTM(hidden_state_size = 96, possible_positions = possible_positions, device=device).to(device)
-        p1_first_knowledge_model.load_state_dict(torch.load(f"p1_lstm96.pt", map_location = device))
+        p1_first_knowledge_model = LSTM(hidden_state_size = 256, possible_positions = possible_positions, device=device).to(device)
+        p1_first_knowledge_model.load_state_dict(torch.load(f"p1_lstm256.pt", map_location = device))
 
-        p1_second_knowledge_model = LSTM_BOB(first_hidden_state_size = 96, hidden_state_size = 128, possible_positions = possible_positions, device=device).to(device)
+        p1_second_knowledge_model = LSTM_BOB(first_hidden_state_size = 256, hidden_state_size = 256, possible_positions = possible_positions, device=device).to(device)
         p1_second_knowledge_model.load_state_dict(torch.load(f"p1_lstm_2nd.pt", map_location = device))
 
         p1_first_knowledge_model.stop()
         p1_second_knowledge_model.stop()
 
 
-        p2_first_knowledge_model = LSTM(hidden_state_size = 96, possible_positions = possible_positions, device=device).to(device)
-        p2_first_knowledge_model.load_state_dict(torch.load(f"p2_lstm96.pt", map_location = device))
+        p2_first_knowledge_model = LSTM(hidden_state_size = 256, possible_positions = possible_positions, device=device).to(device)
+        p2_first_knowledge_model.load_state_dict(torch.load(f"p2_lstm256.pt", map_location = device))
 
-        p2_second_knowledge_model = LSTM_BOB(first_hidden_state_size = 96, hidden_state_size = 128, possible_positions = possible_positions, device=device).to(device)
+        p2_second_knowledge_model = LSTM_BOB(first_hidden_state_size = 256, hidden_state_size = 256, possible_positions = possible_positions, device=device).to(device)
         p2_second_knowledge_model.load_state_dict(torch.load(f"p2_lstm_2nd.pt", map_location = device))
 
         p2_first_knowledge_model.stop()
         p2_second_knowledge_model.stop()
 
     elif strategy == "FIRST":
-        p1_first_knowledge_model = LSTM(hidden_state_size = 96, possible_positions = possible_positions, device=device).to(device)
-        p1_first_knowledge_model.load_state_dict(torch.load(f"p1_lstm96.pt", map_location = device))
-        p2_first_knowledge_model = LSTM(hidden_state_size = 96, possible_positions = possible_positions, device=device).to(device)
-        p2_first_knowledge_model.load_state_dict(torch.load(f"p2_lstm96.pt", map_location = device))
+        p1_first_knowledge_model = LSTM(hidden_state_size = 256, possible_positions = possible_positions, device=device).to(device)
+        p1_first_knowledge_model.load_state_dict(torch.load(f"p1_lstm256.pt", map_location = device))
+        p2_first_knowledge_model = LSTM(hidden_state_size = 256, possible_positions = possible_positions, device=device).to(device)
+        p2_first_knowledge_model.load_state_dict(torch.load(f"p2_lstm256.pt", map_location = device))
 
         p1_first_knowledge_model.stop()
         p2_first_knowledge_model.stop()
@@ -106,6 +109,15 @@ def validate(strategy):
         p2_dqn.load_state_dict(torch.load(f"p2_dqn_lstm.pt", map_location = device))
         p1_dqn.eval()
         p2_dqn.eval()
+    elif strategy == "inter":
+        p1_first_knowledge_model = LSTM(hidden_state_size = 256, possible_positions = possible_positions, device=device).to(device)
+        p1_first_knowledge_model.load_state_dict(torch.load(f"p1_lstm256.pt", map_location = device))
+        p2_first_knowledge_model = LSTM(hidden_state_size = 256, possible_positions = possible_positions, device=device).to(device)
+        p2_first_knowledge_model.load_state_dict(torch.load(f"p2_lstm256.pt", map_location = device))
+
+        p1_first_knowledge_model.stop()
+        p2_first_knowledge_model.stop()
+
     
 
     games                           = [None]  * number_of_games
@@ -137,7 +149,7 @@ def validate(strategy):
             p1_second_knowledge_states[index]   = p1_second_knowledge_model.init_state()
             p2_first_knowledge_states[index]    = p2_first_knowledge_model.init_state()
             p2_second_knowledge_states[index]   = p2_second_knowledge_model.init_state()
-        elif strategy == "FIRST":
+        elif strategy == "FIRST" or strategy == "inter":
             p1_first_knowledge_states[index]    = p1_first_knowledge_model.init_state()
             p2_first_knowledge_states[index]    = p2_first_knowledge_model.init_state()
 
@@ -213,17 +225,34 @@ def validate(strategy):
                 p1_first_knowledge_states[running_index]
                 ) = p1_results[index]
             else:
-                agent_position      = games[running_index].agents["P1"].position
-                valid_moves = games[running_index].valid_moves(agent_position)
-                best_action = valid_moves[0]
-                best_dist   = 15
-                for act in valid_moves:
-                    new_position = games[running_index].new_position(agent_position, act)
-                    new_dist     = manhattan(new_position, games[running_index].agents["E1"].position)
-                    if new_dist < best_dist:
-                        best_dist = new_dist
-                        best_action = act
-                action = best_action
+                # evader_probability, teammate_probability, agent_position, time_left, lamda, size, valid_actions
+                if strategy == "inter":
+                    agent_position                  = games[running_index].agents["P1"].position
+                    valid_moves                     = games[running_index].valid_moves(agent_position)  
+                    hidden_state_0 = p1_first_knowledge_states[running_index][0].squeeze(0)
+                    cell_state_0   = p1_first_knowledge_states[running_index][1].squeeze(0)
+
+                    observation = get_observation("P1", games[running_index], delete_observed_actions_since_last_turn_array=True)
+                    hidden_state_1, cell_state_1, evader_logits, teammate_logits = p1_first_knowledge_model(observation, hidden_state_0, cell_state_0)
+                    p1_first_knowledge_states[running_index] = (hidden_state_1, cell_state_1)
+
+                    evader_probabilities    = torch.softmax(evader_logits, dim=0)
+                    teammate_probabilities  = torch.softmax(teammate_logits, dim=0)
+
+
+                    action = ia1(evader_probabilities.cpu().numpy(), teammate_probabilities.cpu().numpy(), agent_position, (steps[i] / (2 * t_max)), 0.5, 15, valid_moves)
+                else:
+                    agent_position      = games[running_index].agents["P1"].position
+                    valid_moves = games[running_index].valid_moves(agent_position)
+                    best_action = valid_moves[0]
+                    best_dist   = 15
+                    for act in valid_moves:
+                        new_position = games[running_index].new_position(agent_position, act)
+                        new_dist     = manhattan(new_position, games[running_index].agents["E1"].position)
+                        if new_dist < best_dist:
+                            best_dist = new_dist
+                            best_action = act
+                    action = best_action
                     
 
 
@@ -278,17 +307,33 @@ def validate(strategy):
                 p2_first_knowledge_states[running_index]
                 ) = p2_results[index]
             else:
-                agent_position      = games[running_index].agents["P2"].position
-                valid_moves = games[running_index].valid_moves(agent_position)
-                best_action = valid_moves[0]
-                best_dist   = 15
-                for act in valid_moves:
-                    new_position = games[running_index].new_position(agent_position, act)
-                    new_dist     = manhattan(new_position, games[running_index].agents["E1"].position)
-                    if new_dist < best_dist:
-                        best_dist = new_dist
-                        best_action = act
-                action = best_action
+                if strategy == "inter":
+                    agent_position                  = games[running_index].agents["P2"].position
+                    valid_moves                     = games[running_index].valid_moves(agent_position)  
+                    hidden_state_0 = p2_first_knowledge_states[running_index][0].squeeze(0)
+                    cell_state_0   = p2_first_knowledge_states[running_index][1].squeeze(0)
+
+                    observation = get_observation("P2", games[running_index], delete_observed_actions_since_last_turn_array=True)
+                    hidden_state_1, cell_state_1, evader_logits, teammate_logits = p2_first_knowledge_model(observation, hidden_state_0, cell_state_0)
+                    p2_first_knowledge_states[running_index] = (hidden_state_1, cell_state_1)
+
+                    evader_probabilities    = torch.softmax(evader_logits, dim=0)
+                    teammate_probabilities  = torch.softmax(teammate_logits, dim=0)
+
+
+                    action = ia2(evader_probabilities.cpu().numpy(), teammate_probabilities.cpu().numpy(), agent_position, (steps[i] / (2 * t_max)), 0.5, 15, valid_moves)
+                else:
+                    agent_position      = games[running_index].agents["P2"].position
+                    valid_moves = games[running_index].valid_moves(agent_position)
+                    best_action = valid_moves[0]
+                    best_dist   = 15
+                    for act in valid_moves:
+                        new_position = games[running_index].new_position(agent_position, act)
+                        new_dist     = manhattan(new_position, games[running_index].agents["E1"].position)
+                        if new_dist < best_dist:
+                            best_dist = new_dist
+                            best_action = act
+                    action = best_action
 
 
             steps[running_index] += 1
@@ -315,3 +360,4 @@ if __name__ == "__main__":
     validate("BOB")
     validate("FIRST")
     validate("naive")
+    #validate("inter")

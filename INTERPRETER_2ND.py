@@ -23,7 +23,7 @@ def get_feature_matrix(tree_input_dataset, tree_input_names):
 
 
 
-def symbolic_representation(evader_probabilities, teammate_probabilities, teammate_evader_probability, teammate_teammate_probability, agent_positions, lamda, size):
+def symbolic_representation(evader_probabilities, teammate_probabilities, teammate_evader_probability, teammate_teammate_probability, agent_positions, time_left, gamma, size):
     def map_to_mass(probabilities):
         probabilities = probabilities.reshape(size, size)
         agent_row, agent_column = agent_positions
@@ -33,7 +33,7 @@ def symbolic_representation(evader_probabilities, teammate_probabilities, teamma
             np.arange(size),
         )
 
-        Laplace_Kernel = np.exp(-(lamda * np.sqrt((meshgrid_rows - agent_row)**2 + (meshgrid_columns - agent_column)**2)))
+        Laplace_Kernel = np.exp(-(gamma * np.sqrt((meshgrid_rows - agent_row)**2 + (meshgrid_columns - agent_column)**2)))
 
         probabilities_UP    = np.sum(probabilities * Laplace_Kernel * (agent_row        >   meshgrid_rows)) 
         probabilities_DOWN  = np.sum(probabilities * Laplace_Kernel * (agent_row        <   meshgrid_rows))
@@ -49,14 +49,14 @@ def symbolic_representation(evader_probabilities, teammate_probabilities, teamma
     teammate_teammate_masses = map_to_mass(teammate_teammate_probability)
 
 
-    return np.concatenate([evader_masses, teammate_masses, teammate_evader_masses, teammate_teammate_masses, agent_positions])
+    return np.concatenate([evader_masses, teammate_masses, teammate_evader_masses, teammate_teammate_masses, agent_positions, [time_left]])
 
-def get_training_data(agent_id, game, dqn, knowledge_states, knowledge_model, knowledge_states2nd, knowledge_model2nd, lamda, size, time_left):
+def get_training_data(agent_id, game, dqn, knowledge_states, knowledge_model, knowledge_states2nd, knowledge_model2nd, gamma, size, time_left):
     epsilon = 0
     q_values_bool = True
     
     results = knowledge_based_action_bob_dqn(
-        agent_id, [game], dqn, epsilon, [knowledge_states], [knowledge_states2nd], knowledge_model, knowledge_model2nd, time_left, q_values_bool)
+        agent_id, [game], dqn, epsilon, [knowledge_states], [knowledge_states2nd], knowledge_model, knowledge_model2nd, [time_left], q_values_bool)
 
     (agent_position, 
     action, 
@@ -74,7 +74,7 @@ def get_training_data(agent_id, game, dqn, knowledge_states, knowledge_model, kn
     action = Action_to_Index[action]
     valid_actions = [Action_to_Index[act] for act in valid_actions]
 
-    input_representation = symbolic_representation(evader_probability, teammate_probability, teammate_evader_probability, teammate_teammate_probability, agent_position, lamda, size)
+    input_representation = symbolic_representation(evader_probability, teammate_probability, teammate_evader_probability, teammate_teammate_probability, agent_position, gamma, size)
     return Training_Data(
         symbolic_input_representation   =   input_representation,
         oracle_q_values                 =   q_values,
@@ -131,15 +131,15 @@ def reward_func(game, agent_id):
 def simulate(agent_id, control_switch, tree_network, 
              p1_oracle_network, p1_knowledge_update, p1_second_knowledge_model,
              p2_oracle_network, p2_knowledge_update, p2_second_knowledge_model,
-             size, t_max, seed, lamda):
+             size, t_max, seed, gamma):
 
     steps   = 0
     capture = False
 
     gamma = 0.97
 
-    capture_bonus           = 5
-    capture_loss            = -50
+    capture_bonus           = 500
+    capture_loss            = -5000
 
 
     data_set = []
@@ -155,7 +155,7 @@ def simulate(agent_id, control_switch, tree_network,
     for t in range(t_max):
         p1_reward = reward_func(game, "P1")
 
-        p1_data, p1_states, p1_states2nd = get_training_data("P1", game, p1_oracle_network, p1_states, p1_knowledge_update, p1_states2nd, p1_second_knowledge_model, lamda, size, (steps / (2 * t_max)))
+        p1_data, p1_states, p1_states2nd = get_training_data("P1", game, p1_oracle_network, p1_states, p1_knowledge_update, p1_states2nd, p1_second_knowledge_model, gamma, size, (steps / (2 * t_max)))
 
         if agent_id == "P1":
             data_set.append(p1_data)
@@ -169,7 +169,7 @@ def simulate(agent_id, control_switch, tree_network,
             capture = True
             break
         p2_reward = reward_func(game, "P2")
-        p2_data, p2_states, p2_states2nd = get_training_data("P2", game, p2_oracle_network, p2_states, p2_knowledge_update, p2_states2nd,  p2_second_knowledge_model, lamda, size, (steps / (2 * t_max)))
+        p2_data, p2_states, p2_states2nd = get_training_data("P2", game, p2_oracle_network, p2_states, p2_knowledge_update, p2_states2nd,  p2_second_knowledge_model, gamma, size, (steps / (2 * t_max)))
 
         if agent_id == "P2":
             data_set.append(p2_data)
@@ -186,12 +186,10 @@ def simulate(agent_id, control_switch, tree_network,
         if game.is_evader_captured():
             capture = True
             break
-        if agent_id == "P1":
-            reward += -0.1 + 0.1 * (reward_func(game, "P1") - p1_reward)
-        else:
-            reward += -0.1 + 0.1 * (reward_func(game, "P2") - p2_reward)
+
+        reward += -0.1 
     if capture:
-        reward += capture_bonus + 0.15 *(2*t_max - steps)
+        reward += capture_bonus + 15 *(2*t_max - steps)
     else:
         reward += capture_loss
 
@@ -202,7 +200,7 @@ def simulate(agent_id, control_switch, tree_network,
 def collect_dataset(agent_id, control_switch, tree_network, 
                     p1_oracle_network, p1_knowledge_update, p1_second_knowledge_model,
                     p2_oracle_network, p2_knowledge_update, p2_second_knowledge_model,
-                    size, t_max, seed, lamda, dataset_size):
+                    size, t_max, seed, gamma, dataset_size):
 
     symbolic_input_representations  = []        
     oracle_actions                  = []       
@@ -214,7 +212,7 @@ def collect_dataset(agent_id, control_switch, tree_network,
         states, _, _, _ = simulate(agent_id, control_switch, tree_network, 
                                         p1_oracle_network, p1_knowledge_update, p1_second_knowledge_model,
                                         p2_oracle_network, p2_knowledge_update, p2_second_knowledge_model,
-                                        size, t_max, simulate_seed, lamda)
+                                        size, t_max, simulate_seed, gamma)
         simulate_seed += 1
 
         for state in states:
@@ -233,7 +231,7 @@ def collect_dataset(agent_id, control_switch, tree_network,
 def validate_tree(agent_id, tree_network, 
                     p1_oracle_network, p1_knowledge_update, p1_second_knowledge_model,
                     p2_oracle_network, p2_knowledge_update, p2_second_knowledge_model,
-                    size, t_max, seed, lamda, episodes):
+                    size, t_max, seed, gamma, episodes):
 
     rewards     = []
     captures    = []
@@ -244,7 +242,7 @@ def validate_tree(agent_id, tree_network,
         _, reward, capture, step = simulate(agent_id, True, tree_network, 
                                 p1_oracle_network, p1_knowledge_update, p1_second_knowledge_model,
                                 p2_oracle_network, p2_knowledge_update, p2_second_knowledge_model,
-                                size, t_max, simulate_seed, lamda)
+                                size, t_max, simulate_seed, gamma)
         simulate_seed += 1
         rewards.append(reward)
         captures.append(capture)
@@ -264,7 +262,7 @@ def interpreter(agent_id, size, possible_positions,
             "T(up)", "T(DOWN)", "T(LEFT)", "T(RIGHT)",
             "T(E(UP))", "T(E(DOWN))", "T(E(LEFT))", "T(E(RIGHT))",
             "T(T(up))", "T(T(DOWN))", "T(T(LEFT))", "T(T(RIGHT))",
-            "agent_row", "agent_column"
+            "agent_row", "agent_column", "time_left"
             ]
 
     symbolic_input_representations  = []        
@@ -277,7 +275,7 @@ def interpreter(agent_id, size, possible_positions,
     seed    = 1
 
     tree_network = None
-    lamda        = 0.5
+    gamma        = 3
     
     dataset_size = 10_000
     episodes     = 10_000
@@ -291,7 +289,7 @@ def interpreter(agent_id, size, possible_positions,
             agent_id, control_switch, tree_network, 
             p1_oracle_network, p1_knowledge_update, p1_second_knowledge_model,
             p2_oracle_network, p2_knowledge_update, p2_second_knowledge_model,
-            size, t_max, seed, lamda, dataset_size)
+            size, t_max, seed, gamma, dataset_size)
         
         symbolic_input_representations.append(symbolic_input_representation)
         oracle_actions.append(oracle_action)
@@ -312,7 +310,7 @@ def interpreter(agent_id, size, possible_positions,
                 agent_id, tree_network, 
                 p1_oracle_network, p1_knowledge_update, p1_second_knowledge_model,
                 p2_oracle_network, p2_knowledge_update, p2_second_knowledge_model,
-                size, t_max, seed + (dataset_size * number_of_trees * 2), lamda, episodes)
+                size, t_max, seed + (dataset_size * number_of_trees * 2), gamma, episodes)
 
         print(f"For agent {agent_id}, "
             f"tree index {tree_index}, "
@@ -339,20 +337,20 @@ if __name__ == "__main__":
 
     dqn_hidden_size = 96
 
-    p1_first_knowledge_model = LSTM(hidden_state_size = 96, possible_positions = possible_positions, device=device).to(device)
-    p1_first_knowledge_model.load_state_dict(torch.load(f"p1_lstm96.pt", map_location = device))
+    p1_first_knowledge_model = LSTM(hidden_state_size = 256, possible_positions = possible_positions, device=device).to(device)
+    p1_first_knowledge_model.load_state_dict(torch.load(f"p1_lstm256.pt", map_location = device))
 
-    p1_second_knowledge_model = LSTM_BOB(first_hidden_state_size = 96, hidden_state_size = 128, possible_positions = possible_positions, device=device).to(device)
+    p1_second_knowledge_model = LSTM_BOB(first_hidden_state_size = 256, hidden_state_size = 256, possible_positions = possible_positions, device=device).to(device)
     p1_second_knowledge_model.load_state_dict(torch.load(f"p1_lstm_2nd.pt", map_location = device))
 
     p1_first_knowledge_model.stop()
     p1_second_knowledge_model.stop()
 
 
-    p2_first_knowledge_model = LSTM(hidden_state_size = 96, possible_positions = possible_positions, device=device).to(device)
-    p2_first_knowledge_model.load_state_dict(torch.load(f"p2_lstm96.pt", map_location = device))
+    p2_first_knowledge_model = LSTM(hidden_state_size = 256, possible_positions = possible_positions, device=device).to(device)
+    p2_first_knowledge_model.load_state_dict(torch.load(f"p2_lstm256.pt", map_location = device))
 
-    p2_second_knowledge_model = LSTM_BOB(first_hidden_state_size = 96, hidden_state_size = 128, possible_positions = possible_positions, device=device).to(device)
+    p2_second_knowledge_model = LSTM_BOB(first_hidden_state_size = 256, hidden_state_size = 256, possible_positions = possible_positions, device=device).to(device)
     p2_second_knowledge_model.load_state_dict(torch.load(f"p2_lstm_2nd.pt", map_location = device))
 
     p2_first_knowledge_model.stop()

@@ -149,7 +149,7 @@ def validate(p1_lstm, p2_lstm, size, t_max, batch_size, hidden_state_size, batch
 if __name__ == "__main__":
     size = 15
     t_max = 50
-    hidden_state_sizes = [96]
+    hidden_state_sizes = [256]
     batches = 50_000
     batch_size = 250
     learning_rate = 1e-3
@@ -197,7 +197,7 @@ if __name__ == "__main__":
         p1_lstm.stop()
         p2_lstm.stop()
 
-        validate(p1_lstm, p2_lstm, size, t_max, batch_size, hidden_state_size, batches = 2_500, seed = 999123999)
+        #validate(p1_lstm, p2_lstm, size, t_max, batch_size, hidden_state_size, batches = 2_500, seed = 999123999)
 
         torch.save(p1_lstm.state_dict(), f"p1_lstm{hidden_state_size}.pt")
         torch.save(p2_lstm.state_dict(), f"p2_lstm{hidden_state_size}.pt")

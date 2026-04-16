@@ -28,6 +28,12 @@ class LSTM_BOB(nn.Module):
             nn.ReLU(),
         )
 
+        self.gate                               = nn.Sequential(
+            nn.Linear(32 + 3 * hidden_state_size, hidden_state_size),
+            nn.Sigmoid()
+        )
+
+
         self.lstm                                = nn.LSTMCell(hidden_state_size, hidden_state_size)
         self.teammate_evader_belief_logit_map    = nn.Linear(hidden_state_size, possible_positions)
         self.teammate_teammate_belief_logit_map  = nn.Linear(hidden_state_size, possible_positions)
@@ -50,7 +56,11 @@ class LSTM_BOB(nn.Module):
 
         concat          = self.Three_2_1(torch.cat([o_t, agent_beliefs, old_states], dim=1))
 
-        new_hidden_state, new_cell_state = self.lstm(concat, (hidden_state, cell_state))
+        gate            = self.gate(torch.cat([o_t, agent_beliefs, old_states, hidden_state], dim=1))
+
+        lstm_input      = old_states + gate * (concat - old_states) 
+
+        new_hidden_state, new_cell_state = self.lstm(lstm_input, (hidden_state, cell_state))
             
         teammate_evader_logit   = self.teammate_evader_belief_logit_map(new_hidden_state)
         teammate_teammate_logit = self.teammate_teammate_belief_logit_map(new_hidden_state)

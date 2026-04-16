@@ -135,32 +135,33 @@ def loss(dqn, target_dqn, transitions, gamma):
 def train(strategy):
     size                    = 15
     t_max                   = 50
-    seed                    = 1
-    simulations             = 150_000
+    seed                    = 188_888_888
+    simulations             = 250_000
     dqn_hidden_size         = 64
 
 
-    learning_rate           = 3e-4
-    gamma                   = 0.97
-    step_weight             = 6
-    capture_bonus           = 500
+    learning_rate           = 1e-4
+    gamma                   = 0.99
 
-    no_capture_loss         = -5000
-    update_every_t_steps    = 4
+    step_cost               = -0.15
 
-    capture_weight          = 4.0
+    capture_bonus           =  5
+    no_capture_loss         = -8
 
-    batch_size              = 64
+    update_every_t_steps    = 8
+
+
+    batch_size              = 128
     number_of_games         = 32
 
-    mem_size                = 150_000
-    mem_start               = 5_000
+    mem_size                = 250_000
+    mem_start               = 30_000
     possible_positions      = size*size
     
 
     epsilon  = 1
     epsilon_min     = 0.05
-    epsilon_decay   = 0.99995
+    epsilon_decay   = 0.999985
 
     number_of_updates   = 0
     copy_to_target      = 2_000
@@ -189,10 +190,10 @@ def train(strategy):
     
     if strategy == "lstm":
         lstm = True
-        p1_knowledge_model = LSTM(hidden_state_size = 96, possible_positions = possible_positions, device=device).to(device)
-        p1_knowledge_model.load_state_dict(torch.load(f"p1_lstm96.pt", map_location = device))
-        p2_knowledge_model = LSTM(hidden_state_size = 96, possible_positions = possible_positions, device=device).to(device)
-        p2_knowledge_model.load_state_dict(torch.load(f"p2_lstm96.pt", map_location = device))
+        p1_knowledge_model = LSTM(hidden_state_size = 256, possible_positions = possible_positions, device=device).to(device)
+        p1_knowledge_model.load_state_dict(torch.load(f"p1_lstm256.pt", map_location = device))
+        p2_knowledge_model = LSTM(hidden_state_size = 256, possible_positions = possible_positions, device=device).to(device)
+        p2_knowledge_model.load_state_dict(torch.load(f"p2_lstm256.pt", map_location = device))
 
         p1_knowledge_model.stop()
         p2_knowledge_model.stop()
@@ -386,7 +387,7 @@ def train(strategy):
                                 teammate_probability= p1_teammate_probability[running_index],
                                 agent_position      = p1_agent_position[running_index],
                                 agent_action        = Action_to_Index[p1_action[running_index]],
-                                reward              = -10 + 10 * (gamma * reward_func(games[running_index], agent_id="P1") - p1_old_dist[running_index]),
+                                reward              = step_cost,
                                 terminal            = terminal,
                                 time_left           = (steps[running_index] / (2 * t_max)))
             if p1_states0[running_index] is not None:
@@ -396,7 +397,7 @@ def train(strategy):
 
             if terminal:
                 if captured[running_index]:
-                    terminal_helper(running_index, capture_bonus + 15 *(2*t_max - steps[running_index]))
+                    terminal_helper(running_index, capture_bonus )#+3*15 *(2*t_max - steps[running_index]))
                 else:
                     terminal_helper(running_index, no_capture_loss)
             else:
@@ -432,7 +433,7 @@ def train(strategy):
                     teammate_probability= p2_teammate_probability[running_index],
                     agent_position      = p2_agent_position[running_index],
                     agent_action        = Action_to_Index[p2_action[running_index]],
-                    reward              = -10 + 10 * (gamma * reward_func(games[running_index], agent_id="P2") - p2_old_dist[running_index]),
+                    reward              = step_cost,
                     terminal            = terminal,
                     time_left           = (steps[running_index] / (2 * t_max)))
             if p2_states0[running_index] is not None:
@@ -443,7 +444,7 @@ def train(strategy):
 
             if terminal:
                 if captured[running_index]:
-                    terminal_helper(running_index, capture_bonus + 15 *(2*t_max - steps[running_index]))
+                    terminal_helper(running_index, capture_bonus )#+ 3*15 *(2*t_max - steps[running_index]))
                 else:
                     terminal_helper(running_index, no_capture_loss)
             else:
@@ -453,12 +454,12 @@ def train(strategy):
             game.agent_move("E1", random.choice(game.valid_moves(game.agents["E1"].position)))
             captured[index] = game.is_evader_captured()
             if captured[index]:
-                terminal_helper(index, capture_bonus + 15 *(2*t_max - steps[index]))
+                terminal_helper(index, capture_bonus )#+ 3*15 *(2*t_max - steps[index]))
             elif steps[index] >= 2 * t_max:
                 terminal_helper(index, no_capture_loss)
             else:
-                p1_states0[index].reward = -0.1 + 0.1 * (gamma * reward_func(games[index], agent_id="P1") - p1_old_dist[index])
-                p2_states0[index].reward = -0.1 + 0.1 * (gamma * reward_func(games[index], agent_id="P2") - p2_old_dist[index])
+                #p1_states0[index].reward = -0.1
+                #p2_states0[index].reward = -0.1
                 if p1_states1_t[index] is not None:
 
                     add_transition_helper(p1_memory, p1_states1_t[index], p1_states0[index])

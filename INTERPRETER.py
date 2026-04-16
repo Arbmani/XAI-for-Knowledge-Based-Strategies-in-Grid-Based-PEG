@@ -21,7 +21,7 @@ def get_feature_matrix(tree_input_dataset, tree_input_names):
 
 
 
-def symbolic_representation(evader_probabilities, teammate_probabilities, agent_positions, lamda, size):
+def symbolic_representation(evader_probabilities, teammate_probabilities, agent_positions, time_left, gamma, size):
     def map_to_mass(probabilities):
         probabilities = probabilities.reshape(size, size)
         agent_row, agent_column = agent_positions
@@ -31,7 +31,7 @@ def symbolic_representation(evader_probabilities, teammate_probabilities, agent_
             np.arange(size),
         )
 
-        Laplace_Kernel = np.exp(-(lamda * np.sqrt((meshgrid_rows - agent_row)**2 + (meshgrid_columns - agent_column)**2)))
+        Laplace_Kernel = np.exp(-(gamma * np.sqrt((meshgrid_rows - agent_row)**2 + (meshgrid_columns - agent_column)**2)))
 
         probabilities_UP    = np.sum(probabilities * Laplace_Kernel * (agent_row        >   meshgrid_rows)) 
         probabilities_DOWN  = np.sum(probabilities * Laplace_Kernel * (agent_row        <   meshgrid_rows))
@@ -43,13 +43,13 @@ def symbolic_representation(evader_probabilities, teammate_probabilities, agent_
     evader_masses   = map_to_mass(evader_probabilities)
     teammate_masses = map_to_mass(teammate_probabilities)
 
-    return np.concatenate([evader_masses, teammate_masses, agent_positions])
+    return np.concatenate([evader_masses, teammate_masses])#, agent_positions, [time_left]])
 
-def get_training_data(agent_id, game, dqn, knowledge_states, knowledge_model, lamda, size, time_left):
+def get_training_data(agent_id, game, dqn, knowledge_states, knowledge_model, gamma, size, time_left):
     epsilon = 0
     lstm    = True
     q_values_bool = True
-    results = knowledge_based_action(agent_id, [game], dqn, epsilon, [knowledge_states], knowledge_model, lstm, time_left, q_values_bool)
+    results = knowledge_based_action(agent_id, [game], dqn, epsilon, [knowledge_states], knowledge_model, lstm, [time_left], q_values_bool)
     (agent_position, 
     action, 
     evader_probability, 
@@ -63,7 +63,7 @@ def get_training_data(agent_id, game, dqn, knowledge_states, knowledge_model, la
     action = Action_to_Index[action]
     valid_actions = [Action_to_Index[act] for act in valid_actions]
 
-    input_representation = symbolic_representation(evader_probability, teammate_probability, agent_position, lamda, size)
+    input_representation = symbolic_representation(evader_probability, teammate_probability, agent_position, time_left, gamma, size)
     return Training_Data(
         symbolic_input_representation   =   input_representation,
         oracle_q_values                 =   q_values,
@@ -120,15 +120,15 @@ def reward_func(game, agent_id):
 def simulate(agent_id, control_switch, tree_network, 
              p1_oracle_network, p1_knowledge_update, 
              p2_oracle_network, p2_knowledge_update,
-             size, t_max, seed, lamda):
+             size, t_max, seed, gamma):
 
     steps   = 0
     capture = False
 
-    gamma = 0.97
+    #gamma = 0.97
 
-    capture_bonus           = 5
-    capture_loss            = -50
+    capture_bonus           = 500
+    capture_loss            = -5000
 
 
     data_set = []
@@ -139,9 +139,7 @@ def simulate(agent_id, control_switch, tree_network,
 
     reward = 0
     for t in range(t_max):
-        p1_reward = reward_func(game, "P1")
-
-        p1_data, p1_states = get_training_data("P1", game, p1_oracle_network, p1_states, p1_knowledge_update, lamda, size, (steps / (2 * t_max)))
+        p1_data, p1_states = get_training_data("P1", game, p1_oracle_network, p1_states, p1_knowledge_update, gamma, size, (steps / (2 * t_max)))
 
         if agent_id == "P1":
             data_set.append(p1_data)
@@ -154,8 +152,8 @@ def simulate(agent_id, control_switch, tree_network,
         if game.is_evader_captured():
             capture = True
             break
-        p2_reward = reward_func(game, "P2")
-        p2_data, p2_states = get_training_data("P2", game, p2_oracle_network, p2_states, p2_knowledge_update, lamda, size, (steps / (2 * t_max)))
+
+        p2_data, p2_states = get_training_data("P2", game, p2_oracle_network, p2_states, p2_knowledge_update, gamma, size, (steps / (2 * t_max)))
 
         if agent_id == "P2":
             data_set.append(p2_data)
@@ -172,12 +170,9 @@ def simulate(agent_id, control_switch, tree_network,
         if game.is_evader_captured():
             capture = True
             break
-        if agent_id == "P1":
-            reward += -0.1 + 0.1 * (reward_func(game, "P1") - p1_reward)
-        else:
-            reward += -0.1 + 0.1 * (reward_func(game, "P2") - p2_reward)
+        reward += -0.1
     if capture:
-        reward += capture_bonus + 0.15 *(2*t_max - steps)
+        reward += capture_bonus + 15 *(2*t_max - steps)
     else:
         reward += capture_loss
 
@@ -188,7 +183,7 @@ def simulate(agent_id, control_switch, tree_network,
 def collect_dataset(agent_id, control_switch, tree_network, 
                     p1_oracle_network, p1_knowledge_update, 
                     p2_oracle_network, p2_knowledge_update,
-                    size, t_max, seed, lamda, dataset_size):
+                    size, t_max, seed, gamma, dataset_size):
 
     symbolic_input_representations  = []        
     oracle_actions                  = []       
@@ -200,7 +195,7 @@ def collect_dataset(agent_id, control_switch, tree_network,
         states, _, _, _ = simulate(agent_id, control_switch, tree_network, 
                                         p1_oracle_network, p1_knowledge_update, 
                                         p2_oracle_network, p2_knowledge_update,
-                                        size, t_max, simulate_seed, lamda)
+                                        size, t_max, simulate_seed, gamma)
         simulate_seed += 1
 
         for state in states:
@@ -219,7 +214,7 @@ def collect_dataset(agent_id, control_switch, tree_network,
 def validate_tree(agent_id, tree_network, 
                     p1_oracle_network, p1_knowledge_update, 
                     p2_oracle_network, p2_knowledge_update,
-                    size, t_max, seed, lamda, episodes):
+                    size, t_max, seed, gamma, episodes):
 
     rewards     = []
     captures    = []
@@ -230,13 +225,16 @@ def validate_tree(agent_id, tree_network,
         _, reward, capture, step = simulate(agent_id, True, tree_network, 
                                 p1_oracle_network, p1_knowledge_update, 
                                 p2_oracle_network, p2_knowledge_update,
-                                size, t_max, simulate_seed, lamda)
+                                size, t_max, simulate_seed, gamma)
         simulate_seed += 1
         rewards.append(reward)
         captures.append(capture)
         steps.append(step)
 
     return np.mean(rewards), np.mean(captures), np.mean(steps)
+
+feature_names = [1]
+
 
 
 def save_tree_as_python(Decision_Tree_Classifier, feature_names, agent_id, knowledgeorder):
@@ -256,7 +254,7 @@ def save_tree_as_python(Decision_Tree_Classifier, feature_names, agent_id, knowl
             return f"{number_of_tabs}return {left_action}", left_action
         
         if_feature      = feature_names[tree.feature[node_id]]
-        if_threshold    = tree.treshold[node_id]
+        if_threshold    = tree.threshold[node_id]
 
         string_tree = (
             f'{number_of_tabs}if features["{if_feature}"] <= {if_threshold:.6f}:\n'
@@ -266,11 +264,25 @@ def save_tree_as_python(Decision_Tree_Classifier, feature_names, agent_id, knowl
         )
         return string_tree, -1
     
-    string_tree = DepthFirstSearch(0, 1)
+    string_tree, _ = DepthFirstSearch(0, 1)
 
     python_program = (
+        "import random\n"
+        "from INTERPRETER import symbolic_representation, get_feature_vector\n"
+        f"symbole_names = {str(feature_names)}\n"
+        "\n\n"
         "def interpretable_strategy(features):\n"
         f"{string_tree}\n"
+        "\n\n"
+        "def interpretable_action(evader_probability, teammate_probability, agent_position, time_left, gamma, size, valid_actions):\n"
+        "    input_representation = symbolic_representation(evader_probability, teammate_probability, agent_position, time_left, gamma, size)\n"
+        "    input_combinations   = get_feature_vector(input_representation)\n"
+        "    symbole_to_value     = {name: input_combinations[i] for i, name in enumerate(symbole_names)}\n"
+        "    action               = interpretable_strategy(symbole_to_value)\n"
+        "    if action in valid_actions:\n"
+        "        return action\n"
+        "    else:\n"
+        "        return random.choice(valid_actions)\n"
     )
     with open(f"interpretable_strategy_{agent_id}_{knowledgeorder}.py", "w") as file:
         file.write(python_program)
@@ -288,7 +300,7 @@ def interpreter(agent_id, size, possible_positions,
     names = [
             "E(UP)", "E(DOWN)", "E(LEFT)", "E(RIGHT)",
             "T(up)", "T(DOWN)", "T(LEFT)", "T(RIGHT)",
-            "agent_row", "agent_column"
+            #"agent_row", "agent_column", "time_left"
             ]
 
     symbolic_input_representations  = []        
@@ -301,10 +313,10 @@ def interpreter(agent_id, size, possible_positions,
     seed    = 1
 
     tree_network = None
-    lamda        = 0.5
+    gamma        = 3
     
-    dataset_size = 10_000
-    episodes     = 10_0
+    dataset_size = 20_000
+    episodes     = 1_000
     best_score = float("-inf")
     best_tree  = None
     for tree_index in range(number_of_trees):
@@ -315,7 +327,7 @@ def interpreter(agent_id, size, possible_positions,
             agent_id, control_switch, tree_network, 
             p1_oracle_network, p1_knowledge_update, 
             p2_oracle_network, p2_knowledge_update,
-            size, t_max, seed, lamda, dataset_size)
+            size, t_max, seed, gamma, dataset_size)
         
         symbolic_input_representations.append(symbolic_input_representation)
         oracle_actions.append(oracle_action)
@@ -336,7 +348,7 @@ def interpreter(agent_id, size, possible_positions,
                 agent_id, tree_network, 
                 p1_oracle_network, p1_knowledge_update, 
                 p2_oracle_network, p2_knowledge_update,
-                size, t_max, seed + (dataset_size * number_of_trees * 2), lamda, episodes)
+                size, t_max, seed + (dataset_size * number_of_trees * 2), gamma, episodes)
 
         print(f"For agent {agent_id}, "
             f"tree index {tree_index}, "
@@ -361,14 +373,14 @@ if __name__ == "__main__":
     possible_positions = size*size 
     max_leaf_nodes = 16
 
-    p1_first_knowledge_model = LSTM(hidden_state_size = 96, possible_positions = possible_positions, device=device).to(device)
-    p1_first_knowledge_model.load_state_dict(torch.load(f"p1_lstm96.pt", map_location = device))
+    p1_first_knowledge_model = LSTM(hidden_state_size = 256, possible_positions = possible_positions, device=device).to(device)
+    p1_first_knowledge_model.load_state_dict(torch.load(f"p1_lstm256.pt", map_location = device))
     p1_first_knowledge_model.stop()
 
     dqn_hidden_size         = 96
 
-    p2_first_knowledge_model = LSTM(hidden_state_size = 96, possible_positions = possible_positions, device=device).to(device)
-    p2_first_knowledge_model.load_state_dict(torch.load(f"p2_lstm96.pt", map_location = device))
+    p2_first_knowledge_model = LSTM(hidden_state_size = 256, possible_positions = possible_positions, device=device).to(device)
+    p2_first_knowledge_model.load_state_dict(torch.load(f"p2_lstm256.pt", map_location = device))
     p2_first_knowledge_model.stop()
 
 
