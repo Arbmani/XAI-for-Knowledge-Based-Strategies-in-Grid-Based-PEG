@@ -258,7 +258,7 @@ def validate(strategy):
                     teammate_probabilities  = torch.softmax(teammate_logits, dim=0)
 
 
-                    action = ia1(evader_probabilities.cpu().numpy(), teammate_probabilities.cpu().numpy(), agent_position, (steps[i] / (2 * t_max)), 0.5, 15, valid_moves)
+                    action = ia1(evader_probabilities.cpu().numpy(), teammate_probabilities.cpu().numpy(), agent_position, (steps[i] / (2 * t_max)), 3, 15, valid_moves)
                 else:
                     agent_position      = games[running_index].agents["P1"].position
                     valid_moves = games[running_index].valid_moves(agent_position)
@@ -348,7 +348,7 @@ def validate(strategy):
                     teammate_probabilities  = torch.softmax(teammate_logits, dim=0)
 
 
-                    action = ia2(evader_probabilities.cpu().numpy(), teammate_probabilities.cpu().numpy(), agent_position, (steps[i] / (2 * t_max)), 0.5, 15, valid_moves)
+                    action = ia2(evader_probabilities.cpu().numpy(), teammate_probabilities.cpu().numpy(), agent_position, (steps[i] / (2 * t_max)), 3, 15, valid_moves)
                 else:
                     agent_position      = games[running_index].agents["P2"].position
                     valid_moves = games[running_index].valid_moves(agent_position)
