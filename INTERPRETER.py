@@ -43,7 +43,7 @@ def symbolic_representation(evader_probabilities, teammate_probabilities, agent_
     evader_masses   = map_to_mass(evader_probabilities)
     teammate_masses = map_to_mass(teammate_probabilities)
 
-    return np.concatenate([evader_masses, teammate_masses])#, agent_positions, [time_left]])
+    return np.concatenate([evader_masses, teammate_masses, agent_positions, [time_left]])
 
 def get_training_data(agent_id, game, dqn, knowledge_states, knowledge_model, gamma, size, time_left):
     epsilon = 0
@@ -269,6 +269,7 @@ def save_tree_as_python(Decision_Tree_Classifier, feature_names, agent_id, knowl
     python_program = (
         "import random\n"
         "from INTERPRETER import symbolic_representation, get_feature_vector\n"
+        "from environment import Index_to_Action\n"
         f"symbole_names = {str(feature_names)}\n"
         "\n\n"
         "def interpretable_strategy(features):\n"
@@ -278,7 +279,7 @@ def save_tree_as_python(Decision_Tree_Classifier, feature_names, agent_id, knowl
         "    input_representation = symbolic_representation(evader_probability, teammate_probability, agent_position, time_left, gamma, size)\n"
         "    input_combinations   = get_feature_vector(input_representation)\n"
         "    symbole_to_value     = {name: input_combinations[i] for i, name in enumerate(symbole_names)}\n"
-        "    action               = interpretable_strategy(symbole_to_value)\n"
+        "    action               = Index_to_Action[interpretable_strategy(symbole_to_value)]\n"
         "    if action in valid_actions:\n"
         "        return action\n"
         "    else:\n"
@@ -300,7 +301,7 @@ def interpreter(agent_id, size, possible_positions,
     names = [
             "E(UP)", "E(DOWN)", "E(LEFT)", "E(RIGHT)",
             "T(up)", "T(DOWN)", "T(LEFT)", "T(RIGHT)",
-            #"agent_row", "agent_column", "time_left"
+            "agent_row", "agent_column", "time_left"
             ]
 
     symbolic_input_representations  = []        
@@ -315,8 +316,8 @@ def interpreter(agent_id, size, possible_positions,
     tree_network = None
     gamma        = 3
     
-    dataset_size = 20_000
-    episodes     = 1_000
+    dataset_size = 50_000
+    episodes     = 2_000
     best_score = float("-inf")
     best_tree  = None
     for tree_index in range(number_of_trees):
@@ -371,7 +372,7 @@ def interpreter(agent_id, size, possible_positions,
 if __name__ == "__main__":
     size = 15
     possible_positions = size*size 
-    max_leaf_nodes = 16
+    max_leaf_nodes = 32
 
     p1_first_knowledge_model = LSTM(hidden_state_size = 256, possible_positions = possible_positions, device=device).to(device)
     p1_first_knowledge_model.load_state_dict(torch.load(f"p1_lstm256.pt", map_location = device))

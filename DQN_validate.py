@@ -18,22 +18,83 @@ from LSTM_BOB   import LSTM_BOB
 from KBU import KBU
 
 Index_to_Action_tensor  = torch.tensor([(-1, 0), (1, 0), (0, -1), (0, 1)], dtype=torch.long, device=device)
-
+from typing import Optional
 @dataclass
 class state:
-    evader_probability                  : np.ndarray
-    teammate_probability                : np.ndarray
-    teammate_evader_probability         : np.ndarray
-    teammate_teammate_probability       : np.ndarray
-    agent_position                      : np.ndarray
-    agent_action                        : float  
-    reward                              : float 
-    terminal                            : bool
+    evader_probability                  : Optional[np.ndarray] = None  
+    teammate_probability                : Optional[np.ndarray] = None
+    teammate_evader_probability         : Optional[np.ndarray] = None
+    teammate_teammate_probability       : Optional[np.ndarray] = None
+    agent_position                      : Optional[np.ndarray] = None
+    agent_action                        : Optional[float] = None
+    reward                              : Optional[float] = None
+    terminal                            : Optional[bool] = None
 
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 
-def create_plot(p1_state_vector, p2_state_vector, e1_state_vector):
+def create_plot(p1_state_vector, p2_state_vector, e1_state_vector, strategy):
+
+    if strategy == "BOB":
+        maps = 4
+        names = [
+            "evader_probability",
+            "teammate_probability",
+            "teammate_evader_probability",
+            "teammate_teammate_probability"]
+    else:
+        maps = 2
+
+        names = [
+            "evader_probability",
+            "teammate_probability",]
+
+    fig, map_array = plt.subplots(1, maps*2 + 1, figsize=(30, 6), constrained_layout=True)
+
+    def frame(t):
+        p1, p2, e1, = p1_state_vector[t], p2_state_vector[t], e1_state_vector[t]
+
+        for belief_map in map_array:
+            belief_map.clear()
+
+        for i, (belief_map, belief_map_probs, name) in enumerate(zip(map_array[:2*maps], [p1]*maps + [p2]*maps, names*2)):
+            belief_map.imshow(getattr(belief_map_probs, name).reshape(15,15).T, cmap="viridis")
+            belief_map.set_title(("P1 " if i < maps else "P2 ") + name, fontsize=14)
+            belief_map.set_xticks(np.arange(-0.5, 15, 1))
+            belief_map.set_yticks(np.arange(-0.5, 15, 1))
+            belief_map.grid(True, linewidth=2)
+
+        map_array[2*maps].set_title("GAME", fontsize=20)
+        map_array[2*maps].set_xlim(-0.5, 15 -0.5)
+        map_array[2*maps].set_ylim(15 -0.5, 15)
+        map_array[2*maps].set_xticks(np.arange(-0.5, 15, 1))
+        map_array[2*maps].set_yticks(np.arange(-0.5, 15, 1))
+
+        map_array[2*maps].grid(True, linewidth=2)
+
+        c1, r1 = p1.agent_position
+        c2, r2 = p2.agent_position
+        ec1, er1 = e1.agent_position
+
+        map_array[2*maps].scatter(c1, r1, edgecolors="black", s=300, marker="s")
+        map_array[2*maps].scatter(c2, r2, edgecolors="black",s=300, marker="s")
+        map_array[2*maps].scatter(ec1, er1, edgecolors="black", s=300, marker="o")
+
+        map_array[2*maps].text(c1, r1, "P1", fontsize=12, ha="center", va="center")
+        map_array[2*maps].text(c2, r2, "P2", fontsize=12, ha="center", va="center")
+        map_array[2*maps].text(ec1, er1, "E1",fontsize=12,  ha="center", va="center")
+
+        map_array[2*maps].set_box_aspect(1)
+
+
+        return map_array 
+    animation = FuncAnimation(fig, 
+                              frame, 
+                              frames=min(len(p1_state_vector), len(e1_state_vector),len(p2_state_vector)),
+                            interval = 1000, blit=False)
+    animation.save(strategy+".gif", writer="pillow", fps= 1)
+    plt.close(fig)
+
 
     return # TODO
 
@@ -153,6 +214,7 @@ def validate(strategy, make_gif = False):
 
     if make_gif:
         number_of_games = 1
+        simulations = 1
         p1_state_vector = []
         p2_state_vector = []
         e1_state_vector = []
@@ -185,7 +247,7 @@ def validate(strategy, make_gif = False):
         nonlocal average_steps
 
         if make_gif:
-            create_plot(p1_state_vector, p2_state_vector, e1_state_vector)
+            create_plot(p1_state_vector, p2_state_vector, e1_state_vector,strategy)
 
         if captured[index]:
             captured_counter    += 1
@@ -289,13 +351,19 @@ def validate(strategy, make_gif = False):
                     
 
             if make_gif:
-                state = state(
-                                evader_probability  = evader_probabilities,
-                                teammate_probability= teammate_probabilities,
-                                teammate_evader_probability = teammate_evader_probabilities,
-                                teammate_teammate_probability= teammate_probabilities, 
-                                agent_position      = agent_position)
-                p1_state_vector.append(state)
+                if strategy == "BOB":
+                    stategif = state(
+                        evader_probability  = evader_probabilities,
+                        teammate_probability= teammate_probabilities,
+                        teammate_evader_probability = teammate_evader_probabilities,
+                        teammate_teammate_probability= teammate_teammate_probabilities, 
+                        agent_position      = agent_position)
+                else:
+                    stategif = state(
+                        evader_probability  = evader_probabilities,
+                        teammate_probability= teammate_probabilities,
+                        agent_position      = agent_position)
+                p1_state_vector.append(stategif)
 
 
             steps[running_index]                += 1
@@ -387,13 +455,19 @@ def validate(strategy, make_gif = False):
                     action = best_action
 
             if make_gif:
-                state = state(
-                                evader_probability  = evader_probabilities,
-                                teammate_probability= teammate_probabilities,
-                                teammate_evader_probability = teammate_evader_probabilities,
-                                teammate_teammate_probability= teammate_probabilities, 
-                                agent_position      = agent_position)
-                p2_state_vector.append(state)
+                if strategy == "BOB":
+                    stategif = state(
+                        evader_probability  = evader_probabilities,
+                        teammate_probability= teammate_probabilities,
+                        teammate_evader_probability = teammate_evader_probabilities,
+                        teammate_teammate_probability= teammate_teammate_probabilities, 
+                        agent_position      = agent_position)
+                else:
+                    stategif = state(
+                        evader_probability  = evader_probabilities,
+                        teammate_probability= teammate_probabilities,
+                        agent_position      = agent_position)
+                p2_state_vector.append(stategif)
 
             steps[running_index] += 1
             games[running_index].agent_move("P2", action)
@@ -407,9 +481,9 @@ def validate(strategy, make_gif = False):
             game = games[index]
             
             if make_gif:
-                state = state(
+                stategif = state(
                                 agent_position      = game.agents["E1"].position)
-                e1_state_vector.append(state)
+                e1_state_vector.append(stategif)
             game.agent_move("E1", random.choice(game.valid_moves(game.agents["E1"].position)))
             captured[index] = games[index].is_evader_captured()
             if captured[index] or steps[index] >= 2 * t_max :
@@ -424,4 +498,10 @@ if __name__ == "__main__":
     #validate("FIRST")
     #validate("naive")
     #validate("inter")
-    validate("KBU")
+    #validate("KBU")
+
+    validate("BOB", True)
+    validate("FIRST", True)
+    #validate("naive", True)
+    #validate("inter", True)
+    validate("KBU", True)
