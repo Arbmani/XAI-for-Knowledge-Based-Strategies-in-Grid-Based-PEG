@@ -4,6 +4,8 @@ import random
 import torch.nn.functional as F
 from action import device, knowledge_based_action_bob, get_observation
 
+import math
+
 from environment import Create_Game
 
 from DQN import DQN 
@@ -16,18 +18,23 @@ Index_to_Action_tensor  = torch.tensor([(-1, 0), (1, 0), (0, -1), (0, 1)], dtype
 class Memory_Array:
     def __init__(self, batch_size):
         self.batch_size     = batch_size
+        self.max_size       = 10_000
         self.sequences  = []
     
     def add_sequence(self, sequence):
         self.sequences.append(sequence)
+        if len(self.sequences) > self.max_size:
+            self.sequences.pop(0)
 
     def ready(self):
         return len(self.sequences) >= self.batch_size
     
     def get_batch(self):
-        batch = self.sequences[:self.batch_size]
-        self.sequences = self.sequences[self.batch_size:]
-        return batch
+        random_sequences = np.random.choice(len(self.sequences), self.batch_size, replace=False)
+        return [self.sequences[i] for i in random_sequences]
+        #batch = self.sequences[:self.batch_size]
+        #self.sequences = self.sequences[self.batch_size:]
+        #return batch
 
 class Batch_Memory:
     def __init__(self, t_max, possible_positions, observation_size, first_hidden_state_size):
@@ -89,6 +96,7 @@ class Batch_Memory:
             self.time_left)
         
 
+
 def loss(new_knowledge_model, new_knowledge_model_opt, batch):
     batch_size = len(batch)
     t_max = 50
@@ -132,10 +140,11 @@ def loss(new_knowledge_model, new_knowledge_model_opt, batch):
             reduction = "none"
         ).sum(dim=-1)
 
-        total_loss += ((teammate_evader_belief_loss + teammate_teammate_belief_loss) * mask_batch[:,t]).sum()
+        total_loss += (((teammate_evader_belief_loss + teammate_teammate_belief_loss)) * mask_batch[:,t]).sum()
 
     total_loss = total_loss / total_count 
     total_loss.backward()
+    torch.nn.utils.clip_grad_norm_(new_knowledge_model.parameters(), 5.0)
     new_knowledge_model_opt.step()
 
     return total_loss.item()
@@ -158,18 +167,18 @@ def train(Agent):
     size                    = 15
     t_max                   = 50
     seed                    = 591942432
-    simulations             = 6_000_000  # First order lstm was trained on 50 000 batches where each batch was of size 250 games 
-                                         # 50_000 * 250 = 12_500_000
+    simulations             = 6_000_000           # First order lstm was trained on 50 000 batches where each batch was of size 250 games 
+                                                # 50_000 * 250 = 12_500_000
     
     dqn_hidden_size         = 96
-    new_lstm_hidden_size    = 256
+    new_lstm_hidden_size    = 1024
 
     learning_rate           = 1e-4
 
 
 
     batch_size              = 64
-    number_of_games         = 125
+    number_of_games         = 250
     possible_positions      = size*size
     
 
@@ -199,7 +208,7 @@ def train(Agent):
     p2_knowledge_model.stop()
     # def __init__(self, first_hidden_state_size, hidden_state_size, possible_positions, device):
     new_knowledge_model = LSTM_BOB(first_hidden_state_size=256, hidden_state_size=new_lstm_hidden_size, possible_positions=possible_positions, device=device).to(device)
-    new_knowledge_model_opt = torch.optim.AdamW(new_knowledge_model.parameters(), lr=learning_rate)
+    new_knowledge_model_opt = torch.optim.AdamW(new_knowledge_model.parameters(), lr=learning_rate, weight_decay=1e-4)
 
     games                   = [None]  * number_of_games
 
@@ -217,6 +226,7 @@ def train(Agent):
     completed_simulations   = 0
 
     captured_counter    = 0
+    update_every_terminal = 0
 
     sequences = Memory_Array(batch_size)
     losses = 0
@@ -239,9 +249,11 @@ def train(Agent):
         nonlocal captured_counter 
         nonlocal number_of_updates
         nonlocal losses
+        nonlocal update_every_terminal
+        update_every_terminal += 1 
 
         sequences.add_sequence(sequence[index].get_sequence())
-        while(sequences.ready()):
+        if(sequences.ready() and update_every_terminal % 4 == 0):
             batch = sequences.get_batch()
 
             losses += loss(new_knowledge_model, new_knowledge_model_opt, batch)

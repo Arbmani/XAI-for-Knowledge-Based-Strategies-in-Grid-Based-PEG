@@ -163,7 +163,7 @@ def train(strategy):
     size                    = 15
     t_max                   = 50
     seed                    = 177_777_777
-    simulations             = 250_000
+    simulations             = 500_000
     dqn_hidden_size         = 64              #128
 
 
@@ -188,7 +188,7 @@ def train(strategy):
 
     epsilon         = 1
     epsilon_min     = 0.05
-    epsilon_decay   = 0.999985
+    epsilon_decay   = 0.999993
 
     number_of_updates   = 0
     copy_to_target      = 2_000
@@ -219,7 +219,7 @@ def train(strategy):
     p1_first_knowledge_model = LSTM(hidden_state_size = 256, possible_positions = possible_positions, device=device).to(device)
     p1_first_knowledge_model.load_state_dict(torch.load(f"p1_lstm256.pt", map_location = device))
     
-    p1_second_knowledge_model = LSTM_BOB(first_hidden_state_size = 256, hidden_state_size = 256, possible_positions = possible_positions, device=device).to(device)
+    p1_second_knowledge_model = LSTM_BOB(first_hidden_state_size = 256, hidden_state_size = 512, possible_positions = possible_positions, device=device).to(device)
     p1_second_knowledge_model.load_state_dict(torch.load(f"p1_lstm_2nd.pt", map_location = device))
     
     p1_first_knowledge_model.stop()
@@ -229,7 +229,7 @@ def train(strategy):
     p2_first_knowledge_model = LSTM(hidden_state_size = 256, possible_positions = possible_positions, device=device).to(device)
     p2_first_knowledge_model.load_state_dict(torch.load(f"p2_lstm256.pt", map_location = device))
     
-    p2_second_knowledge_model = LSTM_BOB(first_hidden_state_size = 256, hidden_state_size = 256, possible_positions = possible_positions, device=device).to(device)
+    p2_second_knowledge_model = LSTM_BOB(first_hidden_state_size = 256, hidden_state_size = 512, possible_positions = possible_positions, device=device).to(device)
     p2_second_knowledge_model.load_state_dict(torch.load(f"p2_lstm_2nd.pt", map_location = device))
     
     p2_first_knowledge_model.stop()

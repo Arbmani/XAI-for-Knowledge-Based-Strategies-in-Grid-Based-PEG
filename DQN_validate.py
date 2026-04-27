@@ -78,7 +78,7 @@ def validate(strategy):
         p1_first_knowledge_model = LSTM(hidden_state_size = 256, possible_positions = possible_positions, device=device).to(device)
         p1_first_knowledge_model.load_state_dict(torch.load(f"p1_lstm256.pt", map_location = device))
 
-        p1_second_knowledge_model = LSTM_BOB(first_hidden_state_size = 256, hidden_state_size = 256, possible_positions = possible_positions, device=device).to(device)
+        p1_second_knowledge_model = LSTM_BOB(first_hidden_state_size = 256, hidden_state_size = 512, possible_positions = possible_positions, device=device).to(device)
         p1_second_knowledge_model.load_state_dict(torch.load(f"p1_lstm_2nd.pt", map_location = device))
 
         p1_first_knowledge_model.stop()
@@ -88,7 +88,7 @@ def validate(strategy):
         p2_first_knowledge_model = LSTM(hidden_state_size = 256, possible_positions = possible_positions, device=device).to(device)
         p2_first_knowledge_model.load_state_dict(torch.load(f"p2_lstm256.pt", map_location = device))
 
-        p2_second_knowledge_model = LSTM_BOB(first_hidden_state_size = 256, hidden_state_size = 256, possible_positions = possible_positions, device=device).to(device)
+        p2_second_knowledge_model = LSTM_BOB(first_hidden_state_size = 256, hidden_state_size = 512, possible_positions = possible_positions, device=device).to(device)
         p2_second_knowledge_model.load_state_dict(torch.load(f"p2_lstm_2nd.pt", map_location = device))
 
         p2_first_knowledge_model.stop()
@@ -170,7 +170,8 @@ def validate(strategy):
         completed_simulations   += 1
         average_steps           += steps[index]
         if (completed_simulations) % simulations == 0 and completed_simulations > 0:
-            print(f"For {completed_simulations}, epsilon is {epsilon}, captures was {(captured_counter / (simulations))}, average steps is {(average_steps / simulations)}")
+            print(f"For {completed_simulations}, epsilon is {epsilon}, captures was {(captured_counter / (simulations))}, average steps is {(average_steps / simulations)}",
+                  f"Failed to capture was {simulations - captured_counter}")
             captured_counter    = 0
             average_steps       = 0
         if simulation < simulations:

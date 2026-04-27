@@ -136,7 +136,7 @@ def train(strategy):
     size                    = 15
     t_max                   = 50
     seed                    = 188_888_888
-    simulations             = 250_000
+    simulations             = 500_000
     dqn_hidden_size         = 64
 
 
@@ -161,7 +161,7 @@ def train(strategy):
 
     epsilon  = 1
     epsilon_min     = 0.05
-    epsilon_decay   = 0.999985
+    epsilon_decay   = 0.999993
 
     number_of_updates   = 0
     copy_to_target      = 2_000
@@ -475,5 +475,5 @@ def train(strategy):
 
 
 if __name__ == "__main__":
-    train("lstm")
-    #train("kbu")
+    #train("lstm")
+    train("kbu")
