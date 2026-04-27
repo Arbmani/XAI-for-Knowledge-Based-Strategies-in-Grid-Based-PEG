@@ -21,21 +21,25 @@ Index_to_Action_tensor  = torch.tensor([(-1, 0), (1, 0), (0, -1), (0, 1)], dtype
 
 @dataclass
 class state:
-    evader_probability  : np.ndarray
-    teammate_probability: np.ndarray
-    teammate_evader_probability  : np.ndarray
-    teammate_teammate_probability: np.ndarray
-    agent_position      : np.ndarray
-    agent_action        : float  
-    reward              : float 
-    terminal            : bool
+    evader_probability                  : np.ndarray
+    teammate_probability                : np.ndarray
+    teammate_evader_probability         : np.ndarray
+    teammate_teammate_probability       : np.ndarray
+    agent_position                      : np.ndarray
+    agent_action                        : float  
+    reward                              : float 
+    terminal                            : bool
+
+import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
+
+def create_plot(p1_state_vector, p2_state_vector, e1_state_vector):
+
+    return # TODO
 
 
 
-
-
-
-def validate(strategy):
+def validate(strategy, make_gif = False):
     size                    = 15
     t_max                   = 50
     seed                    = 99499112
@@ -119,13 +123,15 @@ def validate(strategy):
         p1_first_knowledge_model.stop()
         p2_first_knowledge_model.stop()
     elif strategy == "KBU":
-        p1_knowledge_model = KBU(size)
-        p2_knowledge_model = KBU(size) 
+        number_of_games         = 1
+        p1_first_knowledge_model = KBU(size)
+        p2_first_knowledge_model = KBU(size) 
 
         p1_dqn = DQN(dqn_hidden_size, possible_positions, device).to(device)
         p1_dqn.load_state_dict(torch.load(f"p1_dqn_kbu.pt", map_location = device))
         p2_dqn = DQN(dqn_hidden_size, possible_positions, device).to(device)
         p2_dqn.load_state_dict(torch.load(f"p2_dqn_kbu.pt", map_location = device))
+
 
 
     games                           = [None]  * number_of_games
@@ -144,6 +150,13 @@ def validate(strategy):
 
     captured_counter                = 0
     average_steps                   = 0
+
+    if make_gif:
+        number_of_games = 1
+        p1_state_vector = []
+        p2_state_vector = []
+        e1_state_vector = []
+
 
     def manhattan(agent_1, agent_2):
         return abs(agent_1[0] - agent_2[0]) + abs(agent_1[1] - agent_2[1])
@@ -171,7 +184,8 @@ def validate(strategy):
         nonlocal captured_counter 
         nonlocal average_steps
 
-
+        if make_gif:
+            create_plot(p1_state_vector, p2_state_vector, e1_state_vector)
 
         if captured[index]:
             captured_counter    += 1
@@ -208,7 +222,7 @@ def validate(strategy):
         elif strategy == "FIRST":
             p1_results = knowledge_based_action("P1", running_games, p1_dqn, epsilon, [p1_first_knowledge_states[i] for i in running_indexes], p1_first_knowledge_model, True, [steps[i] / (2 * t_max) for i in running_indexes])
         elif strategy == "KBU": 
-            p1_results = knowledge_based_action("P1", running_games, p1_dqn, epsilon, [None]*len(running_indexes),  p1_knowledge_model, False, [steps[i] / (2 * t_max) for i in running_indexes])
+            p1_results = knowledge_based_action("P1", running_games, p1_dqn, epsilon, [None]*len(running_indexes),  p1_first_knowledge_model, False, [steps[i] / (2 * t_max) for i in running_indexes])
         else:
             p1_results = []
         
@@ -219,27 +233,27 @@ def validate(strategy):
             #                first_states[i], evader_probabilities[i], teammate_probabilities[i],
             #                second_states[i], teammate_evader_probabilities[i], teammate_teammate_probabilities[i]))
             if strategy == "BOB":
-                (_, 
+                (agent_position, 
                  action, 
                  p1_first_knowledge_states[running_index],
-                 _, 
-                 _, 
+                 evader_probabilities, 
+                 teammate_probabilities, 
                  p1_second_knowledge_states[running_index],
-                 _, 
-                 _, 
+                 teammate_evader_probabilities, 
+                 teammate_teammate_probabilities, 
                  )  = p1_results[index]
             elif strategy == "FIRST":
-                (_, 
+                (agent_position, 
                 action, 
-                _, 
-                _, 
+                evader_probabilities, 
+                teammate_probabilities, 
                 p1_first_knowledge_states[running_index]
                 ) = p1_results[index]
             elif strategy == "KBU":
-                (_, 
+                (agent_position, 
                 action, 
-                _, 
-                _, 
+                evader_probabilities, 
+                teammate_probabilities, 
                 _
                 ) = p1_results[index]
             else:
@@ -260,6 +274,7 @@ def validate(strategy):
 
                     action = ia1(evader_probabilities.cpu().numpy(), teammate_probabilities.cpu().numpy(), agent_position, (steps[i] / (2 * t_max)), 3, 15, valid_moves)
                 else:
+
                     agent_position      = games[running_index].agents["P1"].position
                     valid_moves = games[running_index].valid_moves(agent_position)
                     best_action = valid_moves[0]
@@ -272,6 +287,15 @@ def validate(strategy):
                             best_action = act
                     action = best_action
                     
+
+            if make_gif:
+                state = state(
+                                evader_probability  = evader_probabilities,
+                                teammate_probability= teammate_probabilities,
+                                teammate_evader_probability = teammate_evader_probabilities,
+                                teammate_teammate_probability= teammate_probabilities, 
+                                agent_position      = agent_position)
+                p1_state_vector.append(state)
 
 
             steps[running_index]                += 1
@@ -300,7 +324,7 @@ def validate(strategy):
             elif strategy == "FIRST":
                 p2_results = knowledge_based_action("P2", p2_running_games, p2_dqn, epsilon, [p2_first_knowledge_states[i] for i in p2_running_indexes], p2_first_knowledge_model, True, [steps[i] / (2 * t_max) for i in p2_running_indexes])
             elif strategy == "KBU":
-                p2_results = knowledge_based_action("P2", p2_running_games, p2_dqn, epsilon, [None]*len(p2_running_indexes), p2_knowledge_model, False, [steps[i] / (2 * t_max) for i in p2_running_indexes])
+                p2_results = knowledge_based_action("P2", p2_running_games, p2_dqn, epsilon, [None]*len(p2_running_indexes), p2_first_knowledge_model, False, [steps[i] / (2 * t_max) for i in p2_running_indexes])
             else:
                 p2_results = []
         else:
@@ -310,28 +334,28 @@ def validate(strategy):
 
         for index, running_index in enumerate(p2_running_indexes):
             if strategy == "BOB":
-                (_, 
+                (agent_position, 
                  action, 
                  p2_first_knowledge_states[running_index],
-                 _, 
-                 _, 
+                 evader_probabilities, 
+                 teammate_probabilities, 
                  p2_second_knowledge_states[running_index],
-                 _, 
-                 _, 
+                 teammate_evader_probabilities, 
+                 teammate_teammate_probabilities, 
                  )  = p2_results[index]
             elif strategy == "FIRST":
-                (_, 
+                (agent_position, 
                 action, 
-                _, 
-                _, 
+                evader_probabilities, 
+                teammate_probabilities, 
                 p2_first_knowledge_states[running_index]
                 ) = p2_results[index]
             elif strategy == "KBU":
-                (_, 
+                (agent_position, 
                 action, 
-                _, 
-                _, 
-                p2_first_knowledge_states[running_index]
+                evader_probabilities, 
+                teammate_probabilities, 
+                _,
                 ) = p2_results[index]
             else:
                 if strategy == "inter":
@@ -362,6 +386,14 @@ def validate(strategy):
                             best_action = act
                     action = best_action
 
+            if make_gif:
+                state = state(
+                                evader_probability  = evader_probabilities,
+                                teammate_probability= teammate_probabilities,
+                                teammate_evader_probability = teammate_evader_probabilities,
+                                teammate_teammate_probability= teammate_probabilities, 
+                                agent_position      = agent_position)
+                p2_state_vector.append(state)
 
             steps[running_index] += 1
             games[running_index].agent_move("P2", action)
@@ -373,7 +405,11 @@ def validate(strategy):
                 evader_running_index.append(running_index)
         for index in evader_running_index:
             game = games[index]
-
+            
+            if make_gif:
+                state = state(
+                                agent_position      = game.agents["E1"].position)
+                e1_state_vector.append(state)
             game.agent_move("E1", random.choice(game.valid_moves(game.agents["E1"].position)))
             captured[index] = games[index].is_evader_captured()
             if captured[index] or steps[index] >= 2 * t_max :
