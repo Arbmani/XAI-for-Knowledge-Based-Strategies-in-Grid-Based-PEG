@@ -15,6 +15,7 @@ from DQN_BOB    import DQN_BOB
 from DQN        import DQN 
 from LSTM       import LSTM 
 from LSTM_BOB   import LSTM_BOB
+from KBU import KBU
 
 Index_to_Action_tensor  = torch.tensor([(-1, 0), (1, 0), (0, -1), (0, 1)], dtype=torch.long, device=device)
 
@@ -117,8 +118,15 @@ def validate(strategy):
 
         p1_first_knowledge_model.stop()
         p2_first_knowledge_model.stop()
+    elif strategy == "KBU":
+        p1_knowledge_model = KBU(size)
+        p2_knowledge_model = KBU(size) 
 
-    
+        p1_dqn = DQN(dqn_hidden_size, possible_positions, device).to(device)
+        p1_dqn.load_state_dict(torch.load(f"p1_dqn_kbu.pt", map_location = device))
+        p2_dqn = DQN(dqn_hidden_size, possible_positions, device).to(device)
+        p2_dqn.load_state_dict(torch.load(f"p2_dqn_kbu.pt", map_location = device))
+
 
     games                           = [None]  * number_of_games
 
@@ -199,6 +207,8 @@ def validate(strategy):
                 [steps[i] / (2 * t_max) for i in running_indexes])
         elif strategy == "FIRST":
             p1_results = knowledge_based_action("P1", running_games, p1_dqn, epsilon, [p1_first_knowledge_states[i] for i in running_indexes], p1_first_knowledge_model, True, [steps[i] / (2 * t_max) for i in running_indexes])
+        elif strategy == "KBU": 
+            p1_results = knowledge_based_action("P1", running_games, p1_dqn, epsilon, [None]*len(running_indexes),  p1_knowledge_model, False, [steps[i] / (2 * t_max) for i in running_indexes])
         else:
             p1_results = []
         
@@ -224,6 +234,13 @@ def validate(strategy):
                 _, 
                 _, 
                 p1_first_knowledge_states[running_index]
+                ) = p1_results[index]
+            elif strategy == "KBU":
+                (_, 
+                action, 
+                _, 
+                _, 
+                _
                 ) = p1_results[index]
             else:
                 # evader_probability, teammate_probability, agent_position, time_left, lamda, size, valid_actions
@@ -282,6 +299,8 @@ def validate(strategy):
                 #p2_results = knowledge_based_action("P2", p2_running_games, p2_dqn, epsilon, [p2_knowledge_states[i] for i in p2_running_indexes] if lstm else [None]*len(p2_running_indexes), p2_knowledge_model, lstm)
             elif strategy == "FIRST":
                 p2_results = knowledge_based_action("P2", p2_running_games, p2_dqn, epsilon, [p2_first_knowledge_states[i] for i in p2_running_indexes], p2_first_knowledge_model, True, [steps[i] / (2 * t_max) for i in p2_running_indexes])
+            elif strategy == "KBU":
+                p2_results = knowledge_based_action("P2", p2_running_games, p2_dqn, epsilon, [None]*len(p2_running_indexes), p2_knowledge_model, False, [steps[i] / (2 * t_max) for i in p2_running_indexes])
             else:
                 p2_results = []
         else:
@@ -301,6 +320,13 @@ def validate(strategy):
                  _, 
                  )  = p2_results[index]
             elif strategy == "FIRST":
+                (_, 
+                action, 
+                _, 
+                _, 
+                p2_first_knowledge_states[running_index]
+                ) = p2_results[index]
+            elif strategy == "KBU":
                 (_, 
                 action, 
                 _, 
@@ -358,7 +384,8 @@ def validate(strategy):
 
 
 if __name__ == "__main__":
-    validate("BOB")
-    validate("FIRST")
-    validate("naive")
+    #validate("BOB")
+    #validate("FIRST")
+    #validate("naive")
     #validate("inter")
+    validate("KBU")
