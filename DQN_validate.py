@@ -60,13 +60,15 @@ def create_plot(p1_state_vector, p2_state_vector, e1_state_vector, strategy):
         for i, (belief_map, belief_map_probs, name) in enumerate(zip(map_array[:2*maps], [p1]*maps + [p2]*maps, names*2)):
             belief_map.imshow(getattr(belief_map_probs, name).reshape(15,15).T, cmap="viridis")
             belief_map.set_title(("P1 " if i < maps else "P2 ") + name, fontsize=14)
+            belief_map.set_xlim(-0.5, 15 -0.5)
+            belief_map.set_ylim(15 -0.5, -0.5)
             belief_map.set_xticks(np.arange(-0.5, 15, 1))
             belief_map.set_yticks(np.arange(-0.5, 15, 1))
             belief_map.grid(True, linewidth=2)
 
         map_array[2*maps].set_title("GAME", fontsize=20)
         map_array[2*maps].set_xlim(-0.5, 15 -0.5)
-        map_array[2*maps].set_ylim(15 -0.5, 15)
+        map_array[2*maps].set_ylim(15 -0.5, -0.5)
         map_array[2*maps].set_xticks(np.arange(-0.5, 15, 1))
         map_array[2*maps].set_yticks(np.arange(-0.5, 15, 1))
 
