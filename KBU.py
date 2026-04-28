@@ -32,6 +32,8 @@ class KBU:
                 new_possible_locations[position] = 1.0
                 return new_possible_locations
 
+            possible_locations[np.fromiter(visible_positions, dtype=np.int32)] = 0.0
+            
             for location in np.flatnonzero(possible_locations == 1.0):
                 row, column = divmod(location, self.size)
                 valid       = game.valid_moves((row, column))
