@@ -5,6 +5,8 @@ import torch.nn.functional as F
 from action import device, knowledge_based_action_bob_dqn, knowledge_based_action, get_observation
 from dataclasses import dataclass
 
+import json
+
 from interpretable_strategy_P1_first_order import interpretable_action as ia1
 from interpretable_strategy_P2_first_order import interpretable_action as ia2
 
@@ -58,7 +60,12 @@ def create_plot(p1_state_vector, p2_state_vector, e1_state_vector, strategy):
             belief_map.clear()
 
         for i, (belief_map, belief_map_probs, name) in enumerate(zip(map_array[:2*maps], [p1]*maps + [p2]*maps, names*2)):
-            belief_map.imshow(getattr(belief_map_probs, name).reshape(15,15), cmap="viridis")
+            belief = getattr(belief_map_probs, name)
+            if torch.is_tensor(belief):
+                belief = belief.cpu()
+
+            belief_map.imshow(belief.reshape(15,15), cmap="viridis")
+                
             belief_map.set_title(("P1 " if i < maps else "P2 ") + name, fontsize=14)
             belief_map.set_xlim(-0.5, 15 -0.5)
             belief_map.set_ylim(-0.5, 15 -0.5)
@@ -106,19 +113,11 @@ def validate(strategy, make_gif = False):
     size                    = 15
     t_max                   = 50
     seed                    = 99499112
-    simulations             = 100_000
+    simulations             = 1_000_000
     dqn_hidden_size         = 128
 
 
 
-    gamma                   = 0.97
-
-    capture_bonus           = 1
-    no_capture_loss         = -25
-    update_every_t_steps    = 4
-
-
-    batch_size              = 125
     number_of_games         = 125
 
     possible_positions      = size*size
@@ -126,8 +125,6 @@ def validate(strategy, make_gif = False):
 
     epsilon  = 0
 
-    number_of_updates   = 0
-    copy_to_target      = 1_000
 
     random.seed(seed)
     np.random.seed(seed)
@@ -204,6 +201,8 @@ def validate(strategy, make_gif = False):
     p2_first_knowledge_states       = [None]  * number_of_games
     p2_second_knowledge_states      = [None]  * number_of_games
 
+    game_seed                       = [None]   * number_of_games
+
     steps                           = [0]     * number_of_games
     captured                        = [False] * number_of_games
 
@@ -228,7 +227,8 @@ def validate(strategy, make_gif = False):
     def new_game(index):
         nonlocal simulation
         nonlocal strategy
-        games[index] = Create_Game(size, t_max, seed+simulation)
+        game_seed[index] = seed+simulation
+        games[index] = Create_Game(size, t_max, game_seed[index])
         if strategy == "BOB":
             p1_first_knowledge_states[index]    = p1_first_knowledge_model.init_state()
             p1_second_knowledge_states[index]   = p1_second_knowledge_model.init_state()
@@ -247,16 +247,28 @@ def validate(strategy, make_gif = False):
         nonlocal completed_simulations
         nonlocal captured_counter 
         nonlocal average_steps
+        nonlocal simulation
 
         if make_gif:
             create_plot(p1_state_vector, p2_state_vector, e1_state_vector,strategy)
+        else:
+            row_results = {
+            "Model"     : strategy,
+            "Seed"      : game_seed[index],
+            "Captured"  : captured[index],
+            "Steps"     : steps[index]
+            }
+            with open(f"Results_{strategy}.jsonl", "a") as file:
+                file.write(json.dumps(row_results) + "\n")
 
         if captured[index]:
             captured_counter    += 1
         completed_simulations   += 1
         average_steps           += steps[index]
+
+
         if (completed_simulations) % simulations == 0 and completed_simulations > 0:
-            print(f"For {completed_simulations}, epsilon is {epsilon}, captures was {(captured_counter / (simulations))}, average steps is {(average_steps / simulations)}",
+            print(f"{strategy}: after {completed_simulations}, epsilon is {epsilon}, captures was {(captured_counter / (simulations))}, average steps is {(average_steps / simulations)}",
                   f"Failed to capture was {simulations - captured_counter}")
             captured_counter    = 0
             average_steps       = 0
@@ -497,14 +509,16 @@ def validate(strategy, make_gif = False):
 
 if __name__ == "__main__":
     validate("KBU")
-    #validate("BOB")
+    validate("BOB")
     validate("FIRST")
     validate("naive")
     #validate("inter")
     #validate("KBU")
 
+    print("\nplots:\n")
+
     #validate("BOB", True)
     #validate("FIRST", True)
-    #validate("naive", True)
-    #validate("inter", True)
+    ##validate("naive", True)
+    ##validate("inter", True)
     #validate("KBU", True)
