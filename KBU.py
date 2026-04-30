@@ -46,6 +46,11 @@ class KBU:
         self.evader_possible_locations      = update_possible_locations(evader_position, self.evader_possible_locations) 
         self.teammate_possible_locations    = update_possible_locations(teammate_position, self.teammate_possible_locations)
 
+        if self.evader_possible_locations.sum() == 0:
+            print(f"self.evader_possible_locations.sum() : {self.evader_possible_locations.sum()}")
+        if self.teammate_possible_locations.sum() == 0:
+            print(f"self.teammate_possible_locations.sum() : {self.teammate_possible_locations.sum()}")
+
         return (self.evader_possible_locations / self.evader_possible_locations.sum()), (self.teammate_possible_locations / self.teammate_possible_locations.sum())
 
 

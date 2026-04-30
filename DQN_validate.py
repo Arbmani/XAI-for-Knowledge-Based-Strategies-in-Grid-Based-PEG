@@ -106,7 +106,7 @@ def validate(strategy, make_gif = False):
     size                    = 15
     t_max                   = 50
     seed                    = 99499112
-    simulations             = 40_000
+    simulations             = 100_000
     dqn_hidden_size         = 128
 
 
@@ -234,7 +234,7 @@ def validate(strategy, make_gif = False):
             p1_second_knowledge_states[index]   = p1_second_knowledge_model.init_state()
             p2_first_knowledge_states[index]    = p2_first_knowledge_model.init_state()
             p2_second_knowledge_states[index]   = p2_second_knowledge_model.init_state()
-        elif strategy == "FIRST" or strategy == "inter":
+        elif strategy == "FIRST" or strategy == "inter" or strategy == "KBU":
             p1_first_knowledge_states[index]    = p1_first_knowledge_model.init_state()
             p2_first_knowledge_states[index]    = p2_first_knowledge_model.init_state()
 
@@ -496,14 +496,15 @@ def validate(strategy, make_gif = False):
 
 
 if __name__ == "__main__":
+    validate("KBU")
     #validate("BOB")
-    #validate("FIRST")
-    #validate("naive")
+    validate("FIRST")
+    validate("naive")
     #validate("inter")
     #validate("KBU")
 
-    validate("BOB", True)
-    validate("FIRST", True)
+    #validate("BOB", True)
+    #validate("FIRST", True)
     #validate("naive", True)
     #validate("inter", True)
-    validate("KBU", True)
+    #validate("KBU", True)
