@@ -48,17 +48,17 @@ class LSTM_BOB(nn.Module):
             time_left      = torch.tensor(time_left, dtype=torch.float32, device=self.device)
         time_left = time_left.unsqueeze(1)
         
-        old_states      = self.first_order_states_to_hidden(torch.cat([first_hidden_state, first_cell_state], dim = 1))
+        lower_lstm_states               = self.first_order_states_to_hidden(torch.cat([first_hidden_state, first_cell_state], dim = 1))
 
-        agent_beliefs   = self.beliefs_to_hidden(torch.cat([evader_belief_logit_map, teammate_belief_logit_map], dim=1))
+        main_agent_lower_lstm_beliefs   = self.beliefs_to_hidden(torch.cat([evader_belief_logit_map, teammate_belief_logit_map], dim=1))
 
-        o_t             = self.observation_to_hidden(torch.cat([observation, observed_teammate_actions, time_left], dim=1))
+        o_t                             = self.observation_to_hidden(torch.cat([observation, observed_teammate_actions, time_left], dim=1))
 
-        concat          = self.Three_2_1(torch.cat([o_t, agent_beliefs, old_states], dim=1))
+        concat                          = self.Three_2_1(torch.cat([o_t, main_agent_lower_lstm_beliefs, lower_lstm_states], dim=1))
 
-        gate            = self.gate(torch.cat([o_t, agent_beliefs, old_states, hidden_state], dim=1))
+        gate                            = self.gate(torch.cat([o_t, main_agent_lower_lstm_beliefs, lower_lstm_states, hidden_state], dim=1))
 
-        lstm_input      = old_states + gate * (concat - old_states) 
+        lstm_input      = lower_lstm_states + gate * (concat - lower_lstm_states) 
 
         new_hidden_state, new_cell_state = self.lstm(lstm_input, (hidden_state, cell_state))
             

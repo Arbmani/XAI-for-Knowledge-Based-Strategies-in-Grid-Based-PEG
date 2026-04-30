@@ -167,18 +167,18 @@ def train(Agent):
     size                    = 15
     t_max                   = 50
     seed                    = 591942432
-    simulations             = 6_000_000           # First order lstm was trained on 50 000 batches where each batch was of size 250 games 
+    simulations             = 2_000_000           # First order lstm was trained on 50 000 batches where each batch was of size 250 games 
                                                 # 50_000 * 250 = 12_500_000
     
     dqn_hidden_size         = 96
-    new_lstm_hidden_size    = 1024
+    new_lstm_hidden_size    = 512
 
     learning_rate           = 1e-4
 
 
 
     batch_size              = 64
-    number_of_games         = 250
+    number_of_games         = 64
     possible_positions      = size*size
     
 
@@ -192,17 +192,17 @@ def train(Agent):
     torch.manual_seed(seed)
 
     p1_dqn = DQN(dqn_hidden_size, possible_positions, device).to(device)
-    p1_dqn.load_state_dict(torch.load(Agent + "_dqn_lstm.pt", map_location=device))
+    p1_dqn.load_state_dict(torch.load("p1_dqn_lstm.pt", map_location=device))
     p1_dqn.stop()
 
     p2_dqn = DQN(dqn_hidden_size, possible_positions, device).to(device)
-    p2_dqn.load_state_dict(torch.load(Agent + "_dqn_lstm.pt", map_location=device))
+    p2_dqn.load_state_dict(torch.load("p2_dqn_lstm.pt", map_location=device))
     p2_dqn.stop()
 
     p1_knowledge_model = LSTM(hidden_state_size = 256, possible_positions = possible_positions, device=device).to(device)
-    p1_knowledge_model.load_state_dict(torch.load(Agent + "_lstm256.pt", map_location = device))
+    p1_knowledge_model.load_state_dict(torch.load("p1_lstm256.pt", map_location = device))
     p2_knowledge_model = LSTM(hidden_state_size = 256, possible_positions = possible_positions, device=device).to(device)
-    p2_knowledge_model.load_state_dict(torch.load(Agent + "_lstm256.pt", map_location = device))
+    p2_knowledge_model.load_state_dict(torch.load("p2_lstm256.pt", map_location = device))
 
     p1_knowledge_model.stop()
     p2_knowledge_model.stop()
