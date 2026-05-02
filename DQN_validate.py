@@ -7,8 +7,11 @@ from dataclasses import dataclass
 
 import json
 
-from interpretable_strategy_P1_first_order import interpretable_action as ia1
-from interpretable_strategy_P2_first_order import interpretable_action as ia2
+from interpretable_strategy_P1_first_order_128 import interpretable_action as ia1
+from interpretable_strategy_P2_first_order_128 import interpretable_action as ia2
+
+from interpretable_strategy_P1_second_order_512 import interpretable_action as ia1_2nd
+from interpretable_strategy_P2_second_order_512 import interpretable_action as ia2_2nd
 
 from environment import Create_Game, Action_to_Index
 from copy import copy
@@ -182,6 +185,26 @@ def validate(strategy, make_gif = False):
 
         p1_first_knowledge_model.stop()
         p2_first_knowledge_model.stop()
+    elif strategy == "inter2":
+        p1_first_knowledge_model = LSTM(hidden_state_size = 256, possible_positions = possible_positions, device=device).to(device)
+        p1_first_knowledge_model.load_state_dict(torch.load(f"p1_lstm256.pt", map_location = device))
+
+        p1_second_knowledge_model = LSTM_BOB(first_hidden_state_size = 256, hidden_state_size = 512, possible_positions = possible_positions, device=device).to(device)
+        p1_second_knowledge_model.load_state_dict(torch.load(f"p1_lstm_2nd.pt", map_location = device))
+
+        p1_first_knowledge_model.stop()
+        p1_second_knowledge_model.stop()
+
+
+        p2_first_knowledge_model = LSTM(hidden_state_size = 256, possible_positions = possible_positions, device=device).to(device)
+        p2_first_knowledge_model.load_state_dict(torch.load(f"p2_lstm256.pt", map_location = device))
+
+        p2_second_knowledge_model = LSTM_BOB(first_hidden_state_size = 256, hidden_state_size = 512, possible_positions = possible_positions, device=device).to(device)
+        p2_second_knowledge_model.load_state_dict(torch.load(f"p2_lstm_2nd.pt", map_location = device))
+
+        p2_first_knowledge_model.stop()
+        p2_second_knowledge_model.stop()
+
     elif strategy == "KBU":
         number_of_games         = 1
         p1_first_knowledge_model = KBU(size)
@@ -229,7 +252,7 @@ def validate(strategy, make_gif = False):
         nonlocal strategy
         game_seed[index] = seed+simulation
         games[index] = Create_Game(size, t_max, game_seed[index])
-        if strategy == "BOB":
+        if strategy == "BOB" or strategy == "inter2":
             p1_first_knowledge_states[index]    = p1_first_knowledge_model.init_state()
             p1_second_knowledge_states[index]   = p1_second_knowledge_model.init_state()
             p2_first_knowledge_states[index]    = p2_first_knowledge_model.init_state()
@@ -348,7 +371,32 @@ def validate(strategy, make_gif = False):
                     teammate_probabilities  = torch.softmax(teammate_logits, dim=0)
 
 
-                    action = ia1(evader_probabilities.cpu().numpy(), teammate_probabilities.cpu().numpy(), agent_position, (steps[i] / (2 * t_max)), 3, 15, valid_moves)
+                    action = ia1(evader_probabilities.cpu().numpy(), teammate_probabilities.cpu().numpy(), agent_position, (steps[running_index]  / (2 * t_max)), 0.1, 15, valid_moves)
+                elif strategy == "inter2":
+                    time_left = (steps[running_index] / (2 * t_max))
+                    agent_position                  = games[running_index].agents["P1"].position
+                    valid_moves                     = games[running_index].valid_moves(agent_position)  
+                    hidden_state_0 = p1_first_knowledge_states[running_index][0].squeeze(0)
+                    cell_state_0   = p1_first_knowledge_states[running_index][1].squeeze(0)
+
+                    second_hidden_state_0 = p1_second_knowledge_states[running_index][0].squeeze(0)
+                    second_cell_state_0   = p1_second_knowledge_states[running_index][1].squeeze(0)
+
+                    observation, observed_action = get_observation("P1", games[running_index], delete_observed_actions_since_last_turn_array=True, get_action=True)
+                    hidden_state_1, cell_state_1, evader_logits, teammate_logits = p1_first_knowledge_model(observation, hidden_state_0, cell_state_0)
+                    second_hidden_state_1, second_cell_state_1, second_evader_logit, second_teammate_logit = p1_second_knowledge_model(observation.unsqueeze(0), observed_action.unsqueeze(0), evader_logits.unsqueeze(0), teammate_logits.unsqueeze(0), hidden_state_1.unsqueeze(0), cell_state_1.unsqueeze(0), second_hidden_state_0.unsqueeze(0), second_cell_state_0.unsqueeze(0), [time_left])
+
+
+                    p1_first_knowledge_states[running_index] = (hidden_state_1, cell_state_1)
+                    p1_second_knowledge_states[running_index] = (second_hidden_state_1, second_cell_state_1)
+                    evader_probabilities    = torch.softmax(evader_logits, dim=0)
+                    teammate_probabilities  = torch.softmax(teammate_logits, dim=0)
+
+                    teammate_evader_probability    = torch.softmax(second_evader_logit.squeeze(0), dim=0)
+                    teammate_teammate_probability  = torch.softmax(second_teammate_logit.squeeze(0), dim=0)
+
+                    action = ia1_2nd(evader_probabilities.cpu().numpy(), teammate_probabilities.cpu().numpy(), teammate_evader_probability.cpu().numpy(), teammate_teammate_probability.cpu().numpy(), agent_position, time_left, 0.1, 15, valid_moves)
+
                 else:
 
                     agent_position      = games[running_index].agents["P1"].position
@@ -454,7 +502,40 @@ def validate(strategy, make_gif = False):
                     teammate_probabilities  = torch.softmax(teammate_logits, dim=0)
 
 
-                    action = ia2(evader_probabilities.cpu().numpy(), teammate_probabilities.cpu().numpy(), agent_position, (steps[i] / (2 * t_max)), 3, 15, valid_moves)
+                    action = ia2(evader_probabilities.cpu().numpy(), teammate_probabilities.cpu().numpy(), agent_position, (steps[running_index]  / (2 * t_max)), 0.1, 15, valid_moves)
+                elif strategy == "inter2":
+                    time_left = (steps[running_index]  / (2 * t_max))
+                    agent_position                  = games[running_index].agents["P2"].position
+                    valid_moves                     = games[running_index].valid_moves(agent_position)  
+                    hidden_state_0 = p2_first_knowledge_states[running_index][0].squeeze(0)
+                    cell_state_0   = p2_first_knowledge_states[running_index][1].squeeze(0)
+
+                    second_hidden_state_0 = p2_second_knowledge_states[running_index][0].squeeze(0)
+                    second_cell_state_0   = p2_second_knowledge_states[running_index][1].squeeze(0)
+
+                    observation, observed_action = get_observation("P2", games[running_index], delete_observed_actions_since_last_turn_array=True, get_action=True)
+                    hidden_state_1, cell_state_1, evader_logits, teammate_logits = p2_first_knowledge_model(observation, hidden_state_0, cell_state_0)
+                    second_hidden_state_1, second_cell_state_1, second_evader_logit, second_teammate_logit = p2_second_knowledge_model(
+                        observation.unsqueeze(0), observed_action.unsqueeze(0), 
+                        evader_logits.unsqueeze(0), teammate_logits.unsqueeze(0), 
+                        hidden_state_1.unsqueeze(0), cell_state_1.unsqueeze(0), 
+                        second_hidden_state_0.unsqueeze(0), second_cell_state_0.unsqueeze(0), 
+                        [time_left])
+
+
+                    p2_first_knowledge_states[running_index] = (hidden_state_1, cell_state_1)
+                    p2_second_knowledge_states[running_index] = (second_hidden_state_1, second_cell_state_1)
+
+                    evader_probabilities    = torch.softmax(evader_logits, dim=0)
+                    teammate_probabilities  = torch.softmax(teammate_logits, dim=0)
+
+                    teammate_evader_probability    = torch.softmax(second_evader_logit.squeeze(0), dim=0)
+                    teammate_teammate_probability  = torch.softmax(second_teammate_logit.squeeze(0), dim=0)
+
+                    action = ia2_2nd(evader_probabilities.cpu().numpy(), teammate_probabilities.cpu().numpy(), 
+                                     teammate_evader_probability.cpu().numpy(), teammate_teammate_probability.cpu().numpy(), 
+                                     agent_position, time_left, 0.1, 15, valid_moves)
+
                 else:
                     agent_position      = games[running_index].agents["P2"].position
                     valid_moves = games[running_index].valid_moves(agent_position)
@@ -508,11 +589,12 @@ def validate(strategy, make_gif = False):
 
 
 if __name__ == "__main__":
-    validate("KBU")
-    validate("BOB")
-    validate("FIRST")
-    validate("naive")
+    #validate("KBU")
+    #validate("BOB")
+    #validate("FIRST")
+    #validate("naive")
     #validate("inter")
+    validate("inter2")
     #validate("KBU")
 
     print("\nplots:\n")
