@@ -87,7 +87,7 @@ def mask_illegals(agent_position_t1s):
     rows    = agent_position_t1s[:, 0]
     columns = agent_position_t1s[:, 1]
 
-    mask = torch.zeros((agent_position_t1s.size(0), 4), dtype=torch.bool, device=agent_position_t1s.device)
+    mask = torch.zeros((agent_position_t1s.size(0), 4), dtype=torch.bool, device=device)
     mask[:, 0] = rows > 0
     mask[:, 1] = rows < 14
     mask[:, 2] = columns > 0

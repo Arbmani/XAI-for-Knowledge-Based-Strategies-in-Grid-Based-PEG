@@ -415,7 +415,7 @@ def validate(strategy, make_gif = False):
                     agent_position      = games[running_index].agents["P1"].position
                     valid_moves = games[running_index].valid_moves(agent_position)
                     best_action = valid_moves[0]
-                    best_dist   = 15
+                    best_dist   = float("inf")
                     for act in valid_moves:
                         new_position = games[running_index].new_position(agent_position, act)
                         new_dist     = manhattan(new_position, games[running_index].agents["E1"].position)
@@ -611,10 +611,10 @@ if __name__ == "__main__":
     #validate("KBU")
     #validate("BOB")
     #validate("FIRST")
-    #validate("naive")
+    validate("naive")
     #validate("inter")
     #validate("inter2")
-    validate("interKBU")
+    #validate("interKBU")
     #validate("KBU")
 
     print("\nplots:\n")
