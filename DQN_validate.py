@@ -7,8 +7,11 @@ from dataclasses import dataclass
 
 import json
 
-from interpretable_strategy_P1_first_order_128 import interpretable_action as ia1
-from interpretable_strategy_P2_first_order_128 import interpretable_action as ia2
+from interpretable_strategy_P1_first_order_512 import interpretable_action as ia1
+from interpretable_strategy_P2_first_order_512 import interpretable_action as ia2
+
+from interpretable_strategy_P1_first_order_KBU_512 import interpretable_action as ia1_KBU
+from interpretable_strategy_P2_first_order_KBU_512 import interpretable_action as ia2_KBU
 
 from interpretable_strategy_P1_second_order_512 import interpretable_action as ia1_2nd
 from interpretable_strategy_P2_second_order_512 import interpretable_action as ia2_2nd
@@ -215,6 +218,10 @@ def validate(strategy, make_gif = False):
         p2_dqn = DQN(dqn_hidden_size, possible_positions, device).to(device)
         p2_dqn.load_state_dict(torch.load(f"p2_dqn_kbu.pt", map_location = device))
 
+    elif strategy == "interKBU":
+        number_of_games         = 1
+        p1_first_knowledge_model = KBU(size)
+        p2_first_knowledge_model = KBU(size) 
 
 
     games                           = [None]  * number_of_games
@@ -257,7 +264,7 @@ def validate(strategy, make_gif = False):
             p1_second_knowledge_states[index]   = p1_second_knowledge_model.init_state()
             p2_first_knowledge_states[index]    = p2_first_knowledge_model.init_state()
             p2_second_knowledge_states[index]   = p2_second_knowledge_model.init_state()
-        elif strategy == "FIRST" or strategy == "inter" or strategy == "KBU":
+        elif strategy == "FIRST" or strategy == "inter" or strategy == "KBU" or strategy == "interKBU":
             p1_first_knowledge_states[index]    = p1_first_knowledge_model.init_state()
             p2_first_knowledge_states[index]    = p2_first_knowledge_model.init_state()
 
@@ -372,6 +379,12 @@ def validate(strategy, make_gif = False):
 
 
                     action = ia1(evader_probabilities.cpu().numpy(), teammate_probabilities.cpu().numpy(), agent_position, (steps[running_index]  / (2 * t_max)), 0.1, 15, valid_moves)
+                elif strategy == "interKBU":
+                    agent_position                  = games[running_index].agents["P1"].position
+                    valid_moves                     = games[running_index].valid_moves(agent_position)  
+                    evader_probabilities, teammate_probabilities = p1_first_knowledge_model.forward("P1", games[running_index]) 
+
+                    action = ia1_KBU(evader_probabilities, teammate_probabilities, agent_position, (steps[running_index]  / (2 * t_max)), 0.1, 15, valid_moves)
                 elif strategy == "inter2":
                     time_left = (steps[running_index] / (2 * t_max))
                     agent_position                  = games[running_index].agents["P1"].position
@@ -502,7 +515,13 @@ def validate(strategy, make_gif = False):
                     teammate_probabilities  = torch.softmax(teammate_logits, dim=0)
 
 
-                    action = ia2(evader_probabilities.cpu().numpy(), teammate_probabilities.cpu().numpy(), agent_position, (steps[running_index]  / (2 * t_max)), 0.1, 15, valid_moves)
+                    action = ia2(evader_probabilities.cpu().numpy(), teammate_probabilities.cpu().numpy(), agent_position, (steps[running_index]  / (2 * t_max)), 0.1, 15, valid_moves)  
+                elif strategy == "interKBU":
+                    agent_position                  = games[running_index].agents["P2"].position
+                    valid_moves                     = games[running_index].valid_moves(agent_position)  
+                    evader_probabilities, teammate_probabilities = p2_first_knowledge_model.forward("P2", games[running_index]) 
+
+                    action = ia2_KBU(evader_probabilities, teammate_probabilities, agent_position, (steps[running_index]  / (2 * t_max)), 0.1, 15, valid_moves)
                 elif strategy == "inter2":
                     time_left = (steps[running_index]  / (2 * t_max))
                     agent_position                  = games[running_index].agents["P2"].position
@@ -594,7 +613,8 @@ if __name__ == "__main__":
     #validate("FIRST")
     #validate("naive")
     #validate("inter")
-    validate("inter2")
+    #validate("inter2")
+    validate("interKBU")
     #validate("KBU")
 
     print("\nplots:\n")
@@ -602,5 +622,4 @@ if __name__ == "__main__":
     #validate("BOB", True)
     #validate("FIRST", True)
     ##validate("naive", True)
-    ##validate("inter", True)
     #validate("KBU", True)
