@@ -1,0 +1,1 @@
+In these GIFs, the agents' beliefs are only saved before they move, and therefore will not accurately reflect in between their turns.
