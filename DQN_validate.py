@@ -627,7 +627,9 @@ def validate(strategy, make_gif = False):
                         teammate_probability= teammate_probabilities,
                         agent_position      = agent_position)
                 
-                p1_state_vector.append(p1_state_vector[-1])
+                p1_stategif = p1_state_vector[-1]
+                p1_stategif.agent_position = games[0].agents["P1"].position
+                p1_state_vector.append(p1_stategif)
                 p2_state_vector.append(stategif)
                 e1_state_vector.append(e1_state_vector[-1])
 
@@ -645,8 +647,15 @@ def validate(strategy, make_gif = False):
             if make_gif:
                 stategif = state(
                                 agent_position      = game.agents["E1"].position)
-                p1_state_vector.append(p1_state_vector[-1])
-                p2_state_vector.append(p2_state_vector[-1])
+                
+                p1_stategif = p1_state_vector[-1]
+                p1_stategif.agent_position = games[0].agents["P1"].position
+
+                p2_stategif = p2_state_vector[-1]
+                p2_stategif.agent_position = games[0].agents["P2"].position
+
+                p1_state_vector.append(p1_stategif)
+                p2_state_vector.append(p2_stategif)
                 e1_state_vector.append(stategif)
 
             game.agent_move("E1", random.choice(game.valid_moves(game.agents["E1"].position)))
