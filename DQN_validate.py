@@ -43,7 +43,7 @@ from matplotlib.animation import FuncAnimation
 
 def create_plot(p1_state_vector, p2_state_vector, e1_state_vector, strategy):
 
-    if strategy == "BOB":
+    if strategy == "BOB" or strategy == "inter2":
         maps = 4
         names = [
             "evader_probability",
@@ -59,6 +59,14 @@ def create_plot(p1_state_vector, p2_state_vector, e1_state_vector, strategy):
 
     fig, map_array = plt.subplots(1, maps*2 + 1, figsize=(30, 6), constrained_layout=True)
 
+    name_to_plot_names = {
+        "evader_probability"            : "Evader",
+        "teammate_probability"          : "Teammate",
+        "teammate_evader_probability"   : "Teammate(Evader)",
+        "teammate_teammate_probability" : "Teammate(Teammate)",
+
+    }
+
     def frame(t):
         p1, p2, e1, = p1_state_vector[t], p2_state_vector[t], e1_state_vector[t]
 
@@ -72,7 +80,7 @@ def create_plot(p1_state_vector, p2_state_vector, e1_state_vector, strategy):
 
             belief_map.imshow(belief.reshape(15,15), cmap="viridis")
                 
-            belief_map.set_title(("P1 " if i < maps else "P2 ") + name, fontsize=14)
+            belief_map.set_title(("P1(" if i < maps else "P2(") + name_to_plot_names[name] + ")", fontsize=14)
             belief_map.set_xlim(-0.5, 15 -0.5)
             belief_map.set_ylim(-0.5, 15 -0.5)
             belief_map.set_xticks(np.arange(-0.5, 15, 1))
@@ -106,8 +114,8 @@ def create_plot(p1_state_vector, p2_state_vector, e1_state_vector, strategy):
     animation = FuncAnimation(fig, 
                               frame, 
                               frames=min(len(p1_state_vector), len(e1_state_vector),len(p2_state_vector)),
-                            interval = 1000, blit=False)
-    animation.save(strategy+".gif", writer="pillow", fps= 1)
+                            interval = 1000/3, blit=False)
+    animation.save(strategy+".gif", writer="pillow", fps= 6)
     plt.close(fig)
 
 
@@ -251,7 +259,9 @@ def validate(strategy, make_gif = False):
         e1_state_vector = []
 
 
-    def manhattan(agent_1, agent_2):
+    def manhattan(agent_1, agent_2, return_XnY = False):
+        if return_XnY:
+            return abs(agent_1[0] - agent_2[0]) + abs(agent_1[1] - agent_2[1]), abs(agent_1[0] - agent_2[0]), abs(agent_1[1] - agent_2[1])
         return abs(agent_1[0] - agent_2[0]) + abs(agent_1[1] - agent_2[1])
 
     def new_game(index):
@@ -314,6 +324,13 @@ def validate(strategy, make_gif = False):
     while(completed_simulations < simulations):
         running_indexes = [i for i in range(number_of_games) if games[i] is not None]
         running_games   = [games[i] for i in running_indexes]
+
+        if strategy == "naive" and make_gif:
+            evader_probabilities                    = torch.zeros(1, 225, device =device)  
+            teammate_probabilities                  = torch.zeros(1, 225, device =device)  
+            teammate_evader_probabilities           = torch.zeros(1, 225, device =device)  
+            teammate_teammate_probabilities         = torch.zeros(1, 225, device =device)  
+
         if strategy == "BOB":
             p1_results = knowledge_based_action_bob_dqn(
                 "P1", 
@@ -405,10 +422,10 @@ def validate(strategy, make_gif = False):
                     evader_probabilities    = torch.softmax(evader_logits, dim=0)
                     teammate_probabilities  = torch.softmax(teammate_logits, dim=0)
 
-                    teammate_evader_probability    = torch.softmax(second_evader_logit.squeeze(0), dim=0)
-                    teammate_teammate_probability  = torch.softmax(second_teammate_logit.squeeze(0), dim=0)
+                    teammate_evader_probabilities    = torch.softmax(second_evader_logit.squeeze(0), dim=0)
+                    teammate_teammate_probabilities  = torch.softmax(second_teammate_logit.squeeze(0), dim=0)
 
-                    action = ia1_2nd(evader_probabilities.cpu().numpy(), teammate_probabilities.cpu().numpy(), teammate_evader_probability.cpu().numpy(), teammate_teammate_probability.cpu().numpy(), agent_position, time_left, 0.1, 15, valid_moves)
+                    action = ia1_2nd(evader_probabilities.cpu().numpy(), teammate_probabilities.cpu().numpy(), teammate_evader_probabilities.cpu().numpy(), teammate_teammate_probabilities.cpu().numpy(), agent_position, time_left, 0.1, 15, valid_moves)
 
                 else:
 
@@ -416,17 +433,39 @@ def validate(strategy, make_gif = False):
                     valid_moves = games[running_index].valid_moves(agent_position)
                     best_action = valid_moves[0]
                     best_dist   = float("inf")
+                    best_longest = float("inf")
                     for act in valid_moves:
                         new_position = games[running_index].new_position(agent_position, act)
-                        new_dist     = manhattan(new_position, games[running_index].agents["E1"].position)
-                        if new_dist < best_dist:
+                        new_dist, x_dist, y_dist     = manhattan(new_position, games[running_index].agents["E1"].position, True)
+                        longest = max(x_dist, y_dist)
+                        if new_dist <= best_dist and best_longest > longest:
                             best_dist = new_dist
                             best_action = act
+                            best_longest = longest
                     action = best_action
                     
 
             if make_gif:
-                if strategy == "BOB":
+                if len(p1_state_vector) < 1:
+                    if strategy == "BOB" or strategy == "inter2":
+                        p2_stategif = state(
+                            evader_probability  = evader_probabilities,
+                            teammate_probability= teammate_probabilities,
+                            teammate_evader_probability = teammate_evader_probabilities,
+                            teammate_teammate_probability= teammate_teammate_probabilities, 
+                            agent_position      =  games[0].agents["P2"].position)
+                    else:
+                        p2_stategif = state(
+                            evader_probability  = evader_probabilities,
+                            teammate_probability= teammate_probabilities,
+                            agent_position      =  games[0].agents["P2"].position)
+                        
+                    e1_stategif = state(
+                                agent_position      = games[0].agents["E1"].position)
+                    p2_state_vector.append(p2_stategif)
+                    e1_state_vector.append(e1_stategif)
+
+                if strategy == "BOB" or strategy == "inter2":
                     stategif = state(
                         evader_probability  = evader_probabilities,
                         teammate_probability= teammate_probabilities,
@@ -440,6 +479,10 @@ def validate(strategy, make_gif = False):
                         agent_position      = agent_position)
                 p1_state_vector.append(stategif)
 
+                if len(p1_state_vector) > 1:
+                    p2_state_vector.append(p2_state_vector[-1])
+                    e1_state_vector.append(e1_state_vector[-1])
+                
 
             steps[running_index]                += 1
             games[running_index].agent_move("P1", action)
@@ -548,28 +591,30 @@ def validate(strategy, make_gif = False):
                     evader_probabilities    = torch.softmax(evader_logits, dim=0)
                     teammate_probabilities  = torch.softmax(teammate_logits, dim=0)
 
-                    teammate_evader_probability    = torch.softmax(second_evader_logit.squeeze(0), dim=0)
-                    teammate_teammate_probability  = torch.softmax(second_teammate_logit.squeeze(0), dim=0)
+                    teammate_evader_probabilities    = torch.softmax(second_evader_logit.squeeze(0), dim=0)
+                    teammate_teammate_probabilities  = torch.softmax(second_teammate_logit.squeeze(0), dim=0)
 
                     action = ia2_2nd(evader_probabilities.cpu().numpy(), teammate_probabilities.cpu().numpy(), 
-                                     teammate_evader_probability.cpu().numpy(), teammate_teammate_probability.cpu().numpy(), 
+                                     teammate_evader_probabilities.cpu().numpy(), teammate_teammate_probabilities.cpu().numpy(), 
                                      agent_position, time_left, 0.1, 15, valid_moves)
 
                 else:
                     agent_position      = games[running_index].agents["P2"].position
                     valid_moves = games[running_index].valid_moves(agent_position)
                     best_action = valid_moves[0]
-                    best_dist   = 15
+                    best_dist   = float("inf")
+                    best_longest = float("inf")
                     for act in valid_moves:
                         new_position = games[running_index].new_position(agent_position, act)
-                        new_dist     = manhattan(new_position, games[running_index].agents["E1"].position)
-                        if new_dist < best_dist:
+                        new_dist, x_dist, y_dist     = manhattan(new_position, games[running_index].agents["E1"].position, True)
+                        longest = max(x_dist, y_dist)
+                        if new_dist <= best_dist and best_longest > longest:
                             best_dist = new_dist
                             best_action = act
                     action = best_action
 
             if make_gif:
-                if strategy == "BOB":
+                if strategy == "BOB" or strategy == "inter2":
                     stategif = state(
                         evader_probability  = evader_probabilities,
                         teammate_probability= teammate_probabilities,
@@ -581,7 +626,10 @@ def validate(strategy, make_gif = False):
                         evader_probability  = evader_probabilities,
                         teammate_probability= teammate_probabilities,
                         agent_position      = agent_position)
+                
+                p1_state_vector.append(p1_state_vector[-1])
                 p2_state_vector.append(stategif)
+                e1_state_vector.append(e1_state_vector[-1])
 
             steps[running_index] += 1
             games[running_index].agent_move("P2", action)
@@ -597,7 +645,10 @@ def validate(strategy, make_gif = False):
             if make_gif:
                 stategif = state(
                                 agent_position      = game.agents["E1"].position)
+                p1_state_vector.append(p1_state_vector[-1])
+                p2_state_vector.append(p2_state_vector[-1])
                 e1_state_vector.append(stategif)
+
             game.agent_move("E1", random.choice(game.valid_moves(game.agents["E1"].position)))
             captured[index] = games[index].is_evader_captured()
             if captured[index] or steps[index] >= 2 * t_max :
@@ -611,15 +662,22 @@ if __name__ == "__main__":
     #validate("KBU")
     #validate("BOB")
     #validate("FIRST")
-    validate("naive")
+    #validate("naive")
     #validate("inter")
     #validate("inter2")
     #validate("interKBU")
     #validate("KBU")
 
-    print("\nplots:\n")
+    #print("\nplots:\n")
+    print("Naive is Plottin")
+    validate("naive", True)
 
-    #validate("BOB", True)
-    #validate("FIRST", True)
-    ##validate("naive", True)
-    #validate("KBU", True)
+    print("DQNs are Plottin")
+    validate("BOB", True)
+    validate("FIRST", True)
+    validate("KBU", True)
+
+    print("Trees are Plottin")
+    validate("inter", True)
+    validate("inter2", True)
+    validate("interKBU", True)
