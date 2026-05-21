@@ -4,29 +4,31 @@ import random
 import torch.nn.functional as F
 from action import device, knowledge_based_action_bob_dqn, knowledge_based_action, get_observation
 from dataclasses import dataclass
+from typing import Optional
+import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
 
 import json
 
-from interpretable_strategy_P1_first_order_512 import interpretable_action as ia1
-from interpretable_strategy_P2_first_order_512 import interpretable_action as ia2
+from Decision_Trees.First_Order_BBU_DT.P1_8 import interpretable_action as ia1
+from Decision_Trees.First_Order_BBU_DT.P2_8 import interpretable_action as ia2
 
-from interpretable_strategy_P1_first_order_KBU_512 import interpretable_action as ia1_KBU
-from interpretable_strategy_P2_first_order_KBU_512 import interpretable_action as ia2_KBU
+from Decision_Trees.First_Order_KBU_DT.P1_8 import interpretable_action as ia1_KBU
+from Decision_Trees.First_Order_KBU_DT.P2_8 import interpretable_action as ia2_KBU
 
-from interpretable_strategy_P1_second_order_512 import interpretable_action as ia1_2nd
-from interpretable_strategy_P2_second_order_512 import interpretable_action as ia2_2nd
+from Decision_Trees.Second_Order_BBU_DT.P1_8 import interpretable_action as ia1_2nd
+from Decision_Trees.Second_Order_BBU_DT.P2_8 import interpretable_action as ia2_2nd
 
-from environment import Create_Game, Action_to_Index
-from copy import copy
+from environment import Create_Game
 
 from DQN_BOB    import DQN_BOB 
 from DQN        import DQN 
 from LSTM       import LSTM 
 from LSTM_BOB   import LSTM_BOB
-from KBU import KBU
+from KBU        import KBU
 
 Index_to_Action_tensor  = torch.tensor([(-1, 0), (1, 0), (0, -1), (0, 1)], dtype=torch.long, device=device)
-from typing import Optional
+
 @dataclass
 class state:
     evader_probability                  : Optional[np.ndarray] = None  
@@ -38,8 +40,6 @@ class state:
     reward                              : Optional[float] = None
     terminal                            : Optional[bool] = None
 
-import matplotlib.pyplot as plt
-from matplotlib.animation import FuncAnimation
 
 def create_plot(p1_state_vector, p2_state_vector, e1_state_vector, strategy):
 
@@ -127,8 +127,7 @@ def validate(strategy, make_gif = False):
     size                    = 15
     t_max                   = 50
     seed                    = 99499112
-    simulations             = 1_000_000
-    dqn_hidden_size         = 128
+    simulations             = 1_000
 
 
 
@@ -145,73 +144,73 @@ def validate(strategy, make_gif = False):
     torch.manual_seed(seed)
 
     if strategy == "BOB":
-        p1_dqn = DQN_BOB(dqn_hidden_size, possible_positions, device).to(device)
-        p1_dqn.load_state_dict(torch.load(f"p1_dqn_boblstm.pt", map_location = device))
+        p1_dqn = DQN_BOB(possible_positions, device).to(device)
+        p1_dqn.load_state_dict(torch.load(f"PyTorch_Models/p1_dqn_boblstm.pt", map_location = device))
         p1_dqn.eval()
 
-        p2_dqn = DQN_BOB(dqn_hidden_size, possible_positions, device).to(device)
-        p2_dqn.load_state_dict(torch.load(f"p2_dqn_boblstm.pt", map_location = device))
+        p2_dqn = DQN_BOB(possible_positions, device).to(device)
+        p2_dqn.load_state_dict(torch.load(f"PyTorch_Models/p2_dqn_boblstm.pt", map_location = device))
         p2_dqn.eval()
 
 
         p1_first_knowledge_model = LSTM(hidden_state_size = 256, possible_positions = possible_positions, device=device).to(device)
-        p1_first_knowledge_model.load_state_dict(torch.load(f"p1_lstm256.pt", map_location = device))
+        p1_first_knowledge_model.load_state_dict(torch.load(f"PyTorch_Models/p1_lstm256.pt", map_location = device))
 
         p1_second_knowledge_model = LSTM_BOB(first_hidden_state_size = 256, hidden_state_size = 512, possible_positions = possible_positions, device=device).to(device)
-        p1_second_knowledge_model.load_state_dict(torch.load(f"p1_lstm_2nd.pt", map_location = device))
+        p1_second_knowledge_model.load_state_dict(torch.load(f"PyTorch_Models/p1_lstm_2nd.pt", map_location = device))
 
         p1_first_knowledge_model.stop()
         p1_second_knowledge_model.stop()
 
 
         p2_first_knowledge_model = LSTM(hidden_state_size = 256, possible_positions = possible_positions, device=device).to(device)
-        p2_first_knowledge_model.load_state_dict(torch.load(f"p2_lstm256.pt", map_location = device))
+        p2_first_knowledge_model.load_state_dict(torch.load(f"PyTorch_Models/p2_lstm256.pt", map_location = device))
 
         p2_second_knowledge_model = LSTM_BOB(first_hidden_state_size = 256, hidden_state_size = 512, possible_positions = possible_positions, device=device).to(device)
-        p2_second_knowledge_model.load_state_dict(torch.load(f"p2_lstm_2nd.pt", map_location = device))
+        p2_second_knowledge_model.load_state_dict(torch.load(f"PyTorch_Models/p2_lstm_2nd.pt", map_location = device))
 
         p2_first_knowledge_model.stop()
         p2_second_knowledge_model.stop()
 
     elif strategy == "FIRST":
         p1_first_knowledge_model = LSTM(hidden_state_size = 256, possible_positions = possible_positions, device=device).to(device)
-        p1_first_knowledge_model.load_state_dict(torch.load(f"p1_lstm256.pt", map_location = device))
+        p1_first_knowledge_model.load_state_dict(torch.load(f"PyTorch_Models/p1_lstm256.pt", map_location = device))
         p2_first_knowledge_model = LSTM(hidden_state_size = 256, possible_positions = possible_positions, device=device).to(device)
-        p2_first_knowledge_model.load_state_dict(torch.load(f"p2_lstm256.pt", map_location = device))
+        p2_first_knowledge_model.load_state_dict(torch.load(f"PyTorch_Models/p2_lstm256.pt", map_location = device))
 
         p1_first_knowledge_model.stop()
         p2_first_knowledge_model.stop()
 
-        p1_dqn = DQN(dqn_hidden_size, possible_positions, device).to(device)
-        p1_dqn.load_state_dict(torch.load(f"p1_dqn_lstm.pt", map_location = device))
-        p2_dqn = DQN(dqn_hidden_size, possible_positions, device).to(device)
-        p2_dqn.load_state_dict(torch.load(f"p2_dqn_lstm.pt", map_location = device))
+        p1_dqn = DQN(possible_positions, device).to(device)
+        p1_dqn.load_state_dict(torch.load(f"PyTorch_Models/p1_dqn_lstm.pt", map_location = device))
+        p2_dqn = DQN(possible_positions, device).to(device)
+        p2_dqn.load_state_dict(torch.load(f"PyTorch_Models/p2_dqn_lstm.pt", map_location = device))
         p1_dqn.eval()
         p2_dqn.eval()
     elif strategy == "inter":
         p1_first_knowledge_model = LSTM(hidden_state_size = 256, possible_positions = possible_positions, device=device).to(device)
-        p1_first_knowledge_model.load_state_dict(torch.load(f"p1_lstm256.pt", map_location = device))
+        p1_first_knowledge_model.load_state_dict(torch.load(f"PyTorch_Models/p1_lstm256.pt", map_location = device))
         p2_first_knowledge_model = LSTM(hidden_state_size = 256, possible_positions = possible_positions, device=device).to(device)
-        p2_first_knowledge_model.load_state_dict(torch.load(f"p2_lstm256.pt", map_location = device))
+        p2_first_knowledge_model.load_state_dict(torch.load(f"PyTorch_Models/p2_lstm256.pt", map_location = device))
 
         p1_first_knowledge_model.stop()
         p2_first_knowledge_model.stop()
     elif strategy == "inter2":
         p1_first_knowledge_model = LSTM(hidden_state_size = 256, possible_positions = possible_positions, device=device).to(device)
-        p1_first_knowledge_model.load_state_dict(torch.load(f"p1_lstm256.pt", map_location = device))
+        p1_first_knowledge_model.load_state_dict(torch.load(f"PyTorch_Models/p1_lstm256.pt", map_location = device))
 
         p1_second_knowledge_model = LSTM_BOB(first_hidden_state_size = 256, hidden_state_size = 512, possible_positions = possible_positions, device=device).to(device)
-        p1_second_knowledge_model.load_state_dict(torch.load(f"p1_lstm_2nd.pt", map_location = device))
+        p1_second_knowledge_model.load_state_dict(torch.load(f"PyTorch_Models/p1_lstm_2nd.pt", map_location = device))
 
         p1_first_knowledge_model.stop()
         p1_second_knowledge_model.stop()
 
 
         p2_first_knowledge_model = LSTM(hidden_state_size = 256, possible_positions = possible_positions, device=device).to(device)
-        p2_first_knowledge_model.load_state_dict(torch.load(f"p2_lstm256.pt", map_location = device))
+        p2_first_knowledge_model.load_state_dict(torch.load(f"PyTorch_Models/p2_lstm256.pt", map_location = device))
 
         p2_second_knowledge_model = LSTM_BOB(first_hidden_state_size = 256, hidden_state_size = 512, possible_positions = possible_positions, device=device).to(device)
-        p2_second_knowledge_model.load_state_dict(torch.load(f"p2_lstm_2nd.pt", map_location = device))
+        p2_second_knowledge_model.load_state_dict(torch.load(f"PyTorch_Models/p2_lstm_2nd.pt", map_location = device))
 
         p2_first_knowledge_model.stop()
         p2_second_knowledge_model.stop()
@@ -221,10 +220,10 @@ def validate(strategy, make_gif = False):
         p1_first_knowledge_model = KBU(size)
         p2_first_knowledge_model = KBU(size) 
 
-        p1_dqn = DQN(dqn_hidden_size, possible_positions, device).to(device)
-        p1_dqn.load_state_dict(torch.load(f"p1_dqn_kbu.pt", map_location = device))
-        p2_dqn = DQN(dqn_hidden_size, possible_positions, device).to(device)
-        p2_dqn.load_state_dict(torch.load(f"p2_dqn_kbu.pt", map_location = device))
+        p1_dqn = DQN(possible_positions, device).to(device)
+        p1_dqn.load_state_dict(torch.load(f"PyTorch_Models/p1_dqn_kbu.pt", map_location = device))
+        p2_dqn = DQN(possible_positions, device).to(device)
+        p2_dqn.load_state_dict(torch.load(f"PyTorch_Models/p2_dqn_kbu.pt", map_location = device))
 
     elif strategy == "interKBU":
         number_of_games         = 1
@@ -298,7 +297,7 @@ def validate(strategy, make_gif = False):
             "Captured"  : captured[index],
             "Steps"     : steps[index]
             }
-            with open(f"Results_{strategy}.jsonl", "a") as file:
+            with open(f"Results/Results_{strategy}.jsonl", "a") as file:
                 file.write(json.dumps(row_results) + "\n")
 
         if captured[index]:
@@ -352,9 +351,6 @@ def validate(strategy, make_gif = False):
         p2_running_indexes = []
 
         for index, running_index in enumerate(running_indexes):
-            #results.append((agent_positions[i], action, 
-            #                first_states[i], evader_probabilities[i], teammate_probabilities[i],
-            #                second_states[i], teammate_evader_probabilities[i], teammate_teammate_probabilities[i]))
             if strategy == "BOB":
                 (agent_position, 
                  action, 
@@ -380,7 +376,6 @@ def validate(strategy, make_gif = False):
                 _
                 ) = p1_results[index]
             else:
-                # evader_probability, teammate_probability, agent_position, time_left, lamda, size, valid_actions
                 if strategy == "inter":
                     agent_position                  = games[running_index].agents["P1"].position
                     valid_moves                     = games[running_index].valid_moves(agent_position)  
@@ -395,13 +390,13 @@ def validate(strategy, make_gif = False):
                     teammate_probabilities  = torch.softmax(teammate_logits, dim=0)
 
 
-                    action = ia1(evader_probabilities.cpu().numpy(), teammate_probabilities.cpu().numpy(), agent_position, (steps[running_index]  / (2 * t_max)), 0.1, 15, valid_moves)
+                    action = ia1(evader_probabilities.cpu().numpy(), teammate_probabilities.cpu().numpy(), None, None, agent_position, (steps[running_index]  / (2 * t_max)), 0.1, 15, valid_moves)
                 elif strategy == "interKBU":
                     agent_position                  = games[running_index].agents["P1"].position
                     valid_moves                     = games[running_index].valid_moves(agent_position)  
                     evader_probabilities, teammate_probabilities = p1_first_knowledge_model.forward("P1", games[running_index]) 
 
-                    action = ia1_KBU(evader_probabilities, teammate_probabilities, agent_position, (steps[running_index]  / (2 * t_max)), 0.1, 15, valid_moves)
+                    action = ia1_KBU(evader_probabilities, teammate_probabilities, None, None, agent_position, (steps[running_index]  / (2 * t_max)), 0.1, 15, valid_moves)
                 elif strategy == "inter2":
                     time_left = (steps[running_index] / (2 * t_max))
                     agent_position                  = games[running_index].agents["P1"].position
@@ -506,7 +501,6 @@ def validate(strategy, make_gif = False):
                     p2_first_knowledge_model,
                     p2_second_knowledge_model,
                     [steps[i] / (2 * t_max) for i in p2_running_indexes])
-                #p2_results = knowledge_based_action("P2", p2_running_games, p2_dqn, epsilon, [p2_knowledge_states[i] for i in p2_running_indexes] if lstm else [None]*len(p2_running_indexes), p2_knowledge_model, lstm)
             elif strategy == "FIRST":
                 p2_results = knowledge_based_action("P2", p2_running_games, p2_dqn, epsilon, [p2_first_knowledge_states[i] for i in p2_running_indexes], p2_first_knowledge_model, True, [steps[i] / (2 * t_max) for i in p2_running_indexes])
             elif strategy == "KBU":
@@ -558,13 +552,13 @@ def validate(strategy, make_gif = False):
                     teammate_probabilities  = torch.softmax(teammate_logits, dim=0)
 
 
-                    action = ia2(evader_probabilities.cpu().numpy(), teammate_probabilities.cpu().numpy(), agent_position, (steps[running_index]  / (2 * t_max)), 0.1, 15, valid_moves)  
+                    action = ia2(evader_probabilities.cpu().numpy(), teammate_probabilities.cpu().numpy(), None, None, agent_position, (steps[running_index]  / (2 * t_max)), 0.1, 15, valid_moves)  
                 elif strategy == "interKBU":
                     agent_position                  = games[running_index].agents["P2"].position
                     valid_moves                     = games[running_index].valid_moves(agent_position)  
                     evader_probabilities, teammate_probabilities = p2_first_knowledge_model.forward("P2", games[running_index]) 
 
-                    action = ia2_KBU(evader_probabilities, teammate_probabilities, agent_position, (steps[running_index]  / (2 * t_max)), 0.1, 15, valid_moves)
+                    action = ia2_KBU(evader_probabilities, teammate_probabilities, None, None, agent_position, (steps[running_index]  / (2 * t_max)), 0.1, 15, valid_moves)
                 elif strategy == "inter2":
                     time_left = (steps[running_index]  / (2 * t_max))
                     agent_position                  = games[running_index].agents["P2"].position
@@ -672,21 +666,21 @@ if __name__ == "__main__":
     #validate("BOB")
     #validate("FIRST")
     #validate("naive")
-    #validate("inter")
+    validate("inter")
     #validate("inter2")
     #validate("interKBU")
     #validate("KBU")
 
     #print("\nplots:\n")
-    print("Naive is Plottin")
-    validate("naive", True)
-
-    print("DQNs are Plottin")
-    validate("BOB", True)
-    validate("FIRST", True)
-    validate("KBU", True)
-
-    print("Trees are Plottin")
-    validate("inter", True)
-    validate("inter2", True)
-    validate("interKBU", True)
+    #print("Naive is Plottin")
+    #validate("naive", True)
+#
+    #print("DQNs are Plottin")
+    #validate("BOB", True)
+    #validate("FIRST", True)
+    #validate("KBU", True)
+#
+    #print("Trees are Plottin")
+    #validate("inter", True)
+    #validate("inter2", True)
+    #validate("interKBU", True)

@@ -32,9 +32,7 @@ class Memory_Array:
     def get_batch(self):
         random_sequences = np.random.choice(len(self.sequences), self.batch_size, replace=False)
         return [self.sequences[i] for i in random_sequences]
-        #batch = self.sequences[:self.batch_size]
-        #self.sequences = self.sequences[self.batch_size:]
-        #return batch
+
 
 class Batch_Memory:
     def __init__(self, t_max, possible_positions, observation_size, first_hidden_state_size):
@@ -167,10 +165,8 @@ def train(Agent):
     size                    = 15
     t_max                   = 50
     seed                    = 591942432
-    simulations             = 2_000_000           # First order lstm was trained on 50 000 batches where each batch was of size 250 games 
-                                                # 50_000 * 250 = 12_500_000
+    simulations             = 2_000_000          
     
-    dqn_hidden_size         = 96
     new_lstm_hidden_size    = 512
 
     learning_rate           = 1e-4
@@ -191,11 +187,11 @@ def train(Agent):
     np.random.seed(seed)
     torch.manual_seed(seed)
 
-    p1_dqn = DQN(dqn_hidden_size, possible_positions, device).to(device)
+    p1_dqn = DQN(possible_positions, device).to(device)
     p1_dqn.load_state_dict(torch.load("p1_dqn_lstm.pt", map_location=device))
     p1_dqn.stop()
 
-    p2_dqn = DQN(dqn_hidden_size, possible_positions, device).to(device)
+    p2_dqn = DQN(possible_positions, device).to(device)
     p2_dqn.load_state_dict(torch.load("p2_dqn_lstm.pt", map_location=device))
     p2_dqn.stop()
 
@@ -213,7 +209,6 @@ def train(Agent):
     games                   = [None]  * number_of_games
 
     p1_states               = [None]  * number_of_games
-
     p2_states               = [None]  * number_of_games
 
     steps                   = [0]     * number_of_games
@@ -295,7 +290,6 @@ def train(Agent):
         p1_results = knowledge_based_action_bob("P1", running_games, p1_dqn, epsilon, running_p1_states,  p1_knowledge_model, [steps[i] / (2 * t_max) for i in running_indexes])
         p2_running_indexes = []
 
-        state0 = None
 
 
         for index, running_index in enumerate(running_indexes):
@@ -400,7 +394,7 @@ def train(Agent):
             
 
 
-    torch.save(new_knowledge_model.state_dict(), Agent + "_lstm_2nd.pt")
+    torch.save(new_knowledge_model.state_dict(), f"PyTorch_Models/{Agent}_lstm_2nd.pt")
     return 1
 
 

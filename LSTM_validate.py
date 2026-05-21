@@ -15,9 +15,9 @@ if __name__ == "__main__":
     seed = 100000000000000000000000000000000000
 
     p1_knowledge_model = LSTM(hidden_state_size = 256, possible_positions = possible_positions, device=device).to(device)
-    p1_knowledge_model.load_state_dict(torch.load(f"p1_lstm256.pt", map_location = device))
+    p1_knowledge_model.load_state_dict(torch.load(f"PyTorch_Models/p1_lstm256.pt", map_location = device))
     p2_knowledge_model = LSTM(hidden_state_size = 256, possible_positions = possible_positions, device=device).to(device)
-    p2_knowledge_model.load_state_dict(torch.load(f"p2_lstm256.pt", map_location = device))
+    p2_knowledge_model.load_state_dict(torch.load(f"PyTorch_Models/p2_lstm256.pt", map_location = device))
 
     p1_knowledge_model.stop()
     p2_knowledge_model.stop()

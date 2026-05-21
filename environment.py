@@ -19,7 +19,6 @@ class Game:
         self.agents = agents
         self.pursuer_ids = pursuer_ids
         self.evader_id = evader_id
-        self.turn_order = [pursuer_ids[0], pursuer_ids[1], evader_id]
         self.t_max = t_max
         self.observed_actions_since_last_turn_array = {agent_id: [] for agent_id in agents.keys()}
 

@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn 
 
 class DQN(nn.Module):
-    def __init__(self, hidden_state_size, possible_positions, device):
+    def __init__(self, possible_positions, device):
         super().__init__()
         self.device = device
         self.possible_positions = possible_positions

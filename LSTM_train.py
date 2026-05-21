@@ -199,8 +199,8 @@ if __name__ == "__main__":
 
         #validate(p1_lstm, p2_lstm, size, t_max, batch_size, hidden_state_size, batches = 2_500, seed = 999123999)
 
-        torch.save(p1_lstm.state_dict(), f"p1_lstm{hidden_state_size}.pt")
-        torch.save(p2_lstm.state_dict(), f"p2_lstm{hidden_state_size}.pt")
+        torch.save(p1_lstm.state_dict(), f"PyTorch_Models/p1_lstm{hidden_state_size}.pt")
+        torch.save(p2_lstm.state_dict(), f"PyTorch_Models/p2_lstm{hidden_state_size}.pt")
 
 
 

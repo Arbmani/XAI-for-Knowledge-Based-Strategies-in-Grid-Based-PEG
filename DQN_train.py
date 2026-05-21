@@ -137,7 +137,7 @@ def train(strategy):
     t_max                   = 50
     seed                    = 188_888_888
     simulations             = 500_000
-    dqn_hidden_size         = 64
+
 
 
     learning_rate           = 1e-4
@@ -172,14 +172,14 @@ def train(strategy):
 
 
 
-    p1_dqn = DQN(dqn_hidden_size, possible_positions, device).to(device)
-    p1_dqn_target = DQN(dqn_hidden_size, possible_positions, device).to(device)
+    p1_dqn = DQN(possible_positions, device).to(device)
+    p1_dqn_target = DQN(possible_positions, device).to(device)
     p1_dqn_target.load_state_dict(p1_dqn.state_dict())
     p1_dqn_target.eval()
     p1_dqn_opt = torch.optim.Adam(p1_dqn.parameters(), lr=learning_rate)
 
-    p2_dqn = DQN(dqn_hidden_size, possible_positions, device).to(device)
-    p2_dqn_target = DQN(dqn_hidden_size, possible_positions, device).to(device)
+    p2_dqn = DQN(possible_positions, device).to(device)
+    p2_dqn_target = DQN(possible_positions, device).to(device)
     p2_dqn_target.load_state_dict(p2_dqn.state_dict())
     p2_dqn_target.eval()
     p2_dqn_opt = torch.optim.Adam(p2_dqn.parameters(), lr=learning_rate)
@@ -191,9 +191,9 @@ def train(strategy):
     if strategy == "lstm":
         lstm = True
         p1_knowledge_model = LSTM(hidden_state_size = 256, possible_positions = possible_positions, device=device).to(device)
-        p1_knowledge_model.load_state_dict(torch.load(f"p1_lstm256.pt", map_location = device))
+        p1_knowledge_model.load_state_dict(torch.load(f"PyTorch_Models/p1_lstm256.pt", map_location = device))
         p2_knowledge_model = LSTM(hidden_state_size = 256, possible_positions = possible_positions, device=device).to(device)
-        p2_knowledge_model.load_state_dict(torch.load(f"p2_lstm256.pt", map_location = device))
+        p2_knowledge_model.load_state_dict(torch.load(f"PyTorch_Models/p2_lstm256.pt", map_location = device))
 
         p1_knowledge_model.stop()
         p2_knowledge_model.stop()
@@ -469,8 +469,8 @@ def train(strategy):
             
 
 
-    torch.save(p1_dqn.state_dict(), f"p1_dqn_{strategy}.pt")
-    torch.save(p2_dqn.state_dict(), f"p2_dqn_{strategy}.pt")
+    torch.save(p1_dqn.state_dict(), f"PyTorch_Models/p1_dqn_{strategy}.pt")
+    torch.save(p2_dqn.state_dict(), f"PyTorch_Models/p2_dqn_{strategy}.pt")
     return 1
 
 
