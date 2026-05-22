@@ -43,6 +43,9 @@ def get_observation(agent_id, game, delete_observed_actions_since_last_turn_arra
     return observation
 
 def knowledge_based_action(agent_id, games, dqn, epsilon, states, knowledge_model, lstm, time_left, q_values_bool = False):
+    '''
+    First-Order DQN Action Selection
+    '''
     with torch.no_grad():
         agent_positions             = []
         valid_moves                 = []
@@ -103,11 +106,13 @@ def knowledge_based_action(agent_id, games, dqn, epsilon, states, knowledge_mode
             else:
                 results.append((agent_positions[i], action, evader_probabilities[i].cpu().numpy(), teammate_probabilities[i].cpu().numpy(), states[i] if lstm else None))
         return results
-    #return agent_position, action, evader_probabilities[0].detach().cpu().numpy(), teammate_probabilities[0].detach().cpu().numpy(), state
 
 
 
 def knowledge_based_action_bob(agent_id, games, dqn, epsilon, states, knowledge_model, time_left):
+    '''
+        Only used for training the second-order LSTM.
+    '''
     with torch.no_grad():
         agent_positions             = []
         valid_moves                 = []
@@ -150,6 +155,9 @@ def knowledge_based_action_bob(agent_id, games, dqn, epsilon, states, knowledge_
 
 
 def knowledge_based_action_bob_dqn(agent_id, games, dqn, epsilon, first_states, second_states, first_knowledge_model, second_knowledge_model, time_left, q_values_bool = False):
+    '''
+    Second-Order DQN Action Selection
+    '''
     with torch.no_grad():
         agent_positions             = []
         valid_moves                 = []

@@ -5,7 +5,7 @@ import numpy as np
 
 from action import get_observation, device 
 from environment import Create_Game
-from LSTM import LSTM 
+from First_Order_LSTM import LSTM 
 
 def simulate(game, size, t_max):
 

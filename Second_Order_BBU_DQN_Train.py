@@ -8,9 +8,9 @@ from dataclasses import dataclass
 from environment import Create_Game, Action_to_Index
 from copy import copy
 
-from DQN_BOB import DQN_BOB 
-from LSTM import LSTM 
-from LSTM_BOB import LSTM_BOB
+from Second_Order_BBU_DQN import DQN_BOB 
+from First_Order_LSTM import LSTM 
+from Second_Order_LSTM import LSTM_BOB
 
 Index_to_Action_tensor  = torch.tensor([(-1, 0), (1, 0), (0, -1), (0, 1)], dtype=torch.long, device=device)
 

@@ -1,6 +1,6 @@
 from LSTM_train import validate
 from action import device
-from LSTM import LSTM 
+from First_Order_LSTM import LSTM 
 import torch
 
 

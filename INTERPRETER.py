@@ -8,12 +8,12 @@ from sklearn.tree import DecisionTreeClassifier
 import json
 
 
-from LSTM       import LSTM
-from LSTM_BOB   import LSTM_BOB
+from First_Order_LSTM                   import LSTM
+from Second_Order_LSTM                  import LSTM_BOB
 
-from KBU        import KBU
-from DQN        import DQN
-from DQN_BOB    import DQN_BOB
+from First_Order_KBU                    import KBU
+from First_Order_KBU_or_BBU_DQN         import DQN
+from Second_Order_BBU_DQN               import DQN_BOB
 
 def get_feature_names(tree_input_names):
     interpretable_combination_names = [f"{tree_input_names[i]} - {tree_input_names[j]}" for i in range(len(tree_input_names)) for j in range(i + 1, len(tree_input_names))]
@@ -34,7 +34,7 @@ def symbolic_representation(evader_probabilities, teammate_probabilities, teamma
         probabilities = probabilities.reshape(size, size)
         agent_row, agent_column = agent_positions
 
-        meshgrid_rows, meshgrid_columns = np.meshgrid(
+        meshgrid_columns, meshgrid_rows = np.meshgrid(
             np.arange(size),
             np.arange(size),
         )
@@ -288,7 +288,7 @@ def validate_tree(agent_id, tree_network,
                 "Rewards"               : np.mean(rewards),
                 "Action Agreement"      : np.mean(np.array(action_agreements) / np.array(total_actionss)),
                 }
-        with open(f"Results_Tree_2nd_{save_size}.jsonl", "a") as file:
+        with open(f"Decision_Trees/{strategy}/Results_Tree_2nd_{save_size}.jsonl", "a") as file:
             file.write(json.dumps(row_results) + "\n")
     return np.mean(rewards), np.mean(captures), np.mean(steps), np.mean(np.array(action_agreements) / np.array(total_actionss))
 
@@ -296,10 +296,10 @@ def save_tree_as_python(Decision_Tree_Classifier, feature_names, agent_id, strat
     tree = Decision_Tree_Classifier.tree_
 
     index_to_action_string = {
-        0 : "WALK LEFT",
-        1 : "WALK RIGHT",
-        2 : "WALK DOWN",
-        3 : "WALK UP",
+        0 : "WALK UP",
+        1 : "WALK DOWN",
+        2 : "WALK LEFT",
+        3 : "WALK RIGHT",
     }
 
     def DepthFirstSearch(node_id, depth):
@@ -313,7 +313,7 @@ def save_tree_as_python(Decision_Tree_Classifier, feature_names, agent_id, strat
         right_subtree, right_action = DepthFirstSearch(tree.children_right[node_id], depth+1)
 
         if left_action != -1 and right_action != -1 and left_action == right_action:
-            return f"{number_of_tabs}return {left_action}", left_action
+            return f"{number_of_tabs}return {left_action} # {index_to_action_string[left_action]}", left_action
         
         if_feature      = feature_names[tree.feature[node_id]]
         if_threshold    = tree.threshold[node_id]
@@ -408,7 +408,7 @@ def interpreter(agent_id, size,
         else:
             concatenate_oracle_actions              = np.concatenate([concatenate_oracle_actions, oracle_action])
             concatenate_oracle_action_weights       = np.concatenate([concatenate_oracle_action_weights, oracle_action_weight])
-            features                                = np.vstack([features, get_feature_matrix(symbolic_input_representation)])
+            features                                = np.concatenate([features, get_feature_matrix(symbolic_input_representation)])
 
 
         tree_network = DecisionTreeClassifier(
@@ -422,11 +422,12 @@ def interpreter(agent_id, size,
                 p2_oracle_network, p2_knowledge_update, p2_second_knowledge_model,
                 size, t_max, seed + (dataset_size * number_of_trees * 2), gamma, episodes, False, max_leaf_nodes, strategy)
 
-        print(f"For agent {agent_id}, "
+        print(
+            f"For agent {agent_id}, "
             f"tree index {tree_index}, "
             f"Mean rewards {mean_rewards}, "
             f"Mean captures {mean_captures}, "
-            f"Mean steps {mean_steps}.",
+            f"Mean steps {mean_steps},"
             f"Mean action agreement {mean_action_agreement}")
 
 
@@ -436,20 +437,22 @@ def interpreter(agent_id, size,
         
         
 
-    #val_mean_rewards, val_mean_captures, val_mean_steps, val_mean_action_agreement = validate_tree(
-    #            agent_id, best_tree, 
-    #            p1_oracle_network, p1_knowledge_update, p1_second_knowledge_model,
-    #            p2_oracle_network, p2_knowledge_update, p2_second_knowledge_model,
-    #            size, t_max, 109133331, gamma, 40_000, True, max_leaf_nodes, strategy)
+    val_mean_rewards, val_mean_captures, val_mean_steps, val_mean_action_agreement = validate_tree(
+                agent_id, best_tree, 
+                p1_oracle_network, p1_knowledge_update, p1_second_knowledge_model,
+                p2_oracle_network, p2_knowledge_update, p2_second_knowledge_model,
+                size, t_max, 109133331, gamma, 40_000, True, max_leaf_nodes, strategy)
     
 
-    #print("     Validation Results:")
-    #print(f"        For agent {agent_id}, "
-    #    f"tree index {tree_index}, "
-    #    f"Mean rewards {val_mean_rewards}, "
-    #    f"Mean captures {val_mean_captures}, "
-    #    f"Mean steps {val_mean_steps}.",
-    #    f"Mean action agreement {val_mean_action_agreement}")
+    print(
+        "     Validation Results:")
+    print(
+        f"        For agent {agent_id}, "
+        f"tree index {tree_index}, "
+        f"Mean rewards {val_mean_rewards}, "
+        f"Mean captures {val_mean_captures}, "
+        f"Mean steps {val_mean_steps},"
+        f"Mean action agreement {val_mean_action_agreement}")
 
     save_tree_as_python(best_tree, feature_names, agent_id, strategy, max_leaf_nodes)
 

@@ -8,10 +8,10 @@ import math
 
 from environment import Create_Game
 
-from DQN import DQN 
-from LSTM import LSTM 
+from First_Order_KBU_or_BBU_DQN import DQN 
+from First_Order_LSTM import LSTM 
 
-from LSTM_BOB import LSTM_BOB
+from Second_Order_LSTM import LSTM_BOB
 
 Index_to_Action_tensor  = torch.tensor([(-1, 0), (1, 0), (0, -1), (0, 1)], dtype=torch.long, device=device)
 

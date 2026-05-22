@@ -8,9 +8,9 @@ from dataclasses import dataclass
 from environment import Create_Game, Action_to_Index
 from copy import copy
 
-from DQN import DQN 
-from LSTM import LSTM 
-from KBU import KBU
+from First_Order_KBU_or_BBU_DQN import DQN 
+from First_Order_LSTM import LSTM 
+from First_Order_KBU import KBU
 
 
 Index_to_Action_tensor  = torch.tensor([(-1, 0), (1, 0), (0, -1), (0, 1)], dtype=torch.long, device=device)
@@ -239,29 +239,7 @@ def train(strategy):
     average_steps       = 0
 
     added_transitions = 0
-    def reward_func(game, agent_id):
-        if game.is_evader_captured():
-            return 0.0
-    
-        e  = game.agents["E1"].position
-        p1 = game.agents["P1"].position
-        p2 = game.agents["P2"].position
-    
-        d1 = abs(p1[0] - e[0]) + abs(p1[1] - e[1])
-        d2 = abs(p2[0] - e[0]) + abs(p2[1] - e[1])
 
-        if agent_id is not None:
-            if agent_id == "P1":
-                d2 = d2 * 0.5
-            elif agent_id == "P2":
-                d1 = d1 * 0.5
-            else: 
-                print("Error")
-        
-        return 0
-        return (
-            -(d1 + d2)         
-        )
     
 
     p1_old_dist                   = [None]  * number_of_games
@@ -391,13 +369,12 @@ def train(strategy):
                                 terminal            = terminal,
                                 time_left           = (steps[running_index] / (2 * t_max)))
             if p1_states0[running_index] is not None:
-            #    add_transition_helper(p1_memory, p1_states0[running_index], p1_states1)
                 p1_states1_t[running_index]  = copy(p1_states0[running_index])
             p1_states0[running_index]  = p1_states1
 
             if terminal:
                 if captured[running_index]:
-                    terminal_helper(running_index, capture_bonus )#+3*15 *(2*t_max - steps[running_index]))
+                    terminal_helper(running_index, capture_bonus )
                 else:
                     terminal_helper(running_index, no_capture_loss)
             else:
@@ -437,14 +414,13 @@ def train(strategy):
                     terminal            = terminal,
                     time_left           = (steps[running_index] / (2 * t_max)))
             if p2_states0[running_index] is not None:
-            #    add_transition_helper(p2_memory, p2_states0[running_index], p2_states1)
                 p2_states1_t[running_index] = copy(p2_states0[running_index])
             p2_states0[running_index] = p2_states1
 
 
             if terminal:
                 if captured[running_index]:
-                    terminal_helper(running_index, capture_bonus )#+ 3*15 *(2*t_max - steps[running_index]))
+                    terminal_helper(running_index, capture_bonus )
                 else:
                     terminal_helper(running_index, no_capture_loss)
             else:
@@ -454,12 +430,10 @@ def train(strategy):
             game.agent_move("E1", random.choice(game.valid_moves(game.agents["E1"].position)))
             captured[index] = game.is_evader_captured()
             if captured[index]:
-                terminal_helper(index, capture_bonus )#+ 3*15 *(2*t_max - steps[index]))
+                terminal_helper(index, capture_bonus )
             elif steps[index] >= 2 * t_max:
                 terminal_helper(index, no_capture_loss)
             else:
-                #p1_states0[index].reward = -0.1
-                #p2_states0[index].reward = -0.1
                 if p1_states1_t[index] is not None:
 
                     add_transition_helper(p1_memory, p1_states1_t[index], p1_states0[index])

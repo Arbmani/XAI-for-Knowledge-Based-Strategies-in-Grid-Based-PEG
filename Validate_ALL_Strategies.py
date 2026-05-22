@@ -21,11 +21,11 @@ from Decision_Trees.Second_Order_BBU_DT.P2_8 import interpretable_action as ia2_
 
 from environment import Create_Game
 
-from DQN_BOB    import DQN_BOB 
-from DQN        import DQN 
-from LSTM       import LSTM 
-from LSTM_BOB   import LSTM_BOB
-from KBU        import KBU
+from Second_Order_BBU_DQN    import DQN_BOB 
+from First_Order_KBU_or_BBU_DQN        import DQN 
+from First_Order_LSTM       import LSTM 
+from Second_Order_LSTM   import LSTM_BOB
+from First_Order_KBU        import KBU
 
 Index_to_Action_tensor  = torch.tensor([(-1, 0), (1, 0), (0, -1), (0, 1)], dtype=torch.long, device=device)
 
@@ -43,7 +43,7 @@ class state:
 
 def create_plot(p1_state_vector, p2_state_vector, e1_state_vector, strategy):
 
-    if strategy == "BOB" or strategy == "inter2":
+    if strategy == "Second_Order_BBU_DQN" or strategy == "Second_Order_BBU_DT":
         maps = 4
         names = [
             "evader_probability",
@@ -143,7 +143,7 @@ def validate(strategy, make_gif = False):
     np.random.seed(seed)
     torch.manual_seed(seed)
 
-    if strategy == "BOB":
+    if strategy == "Second_Order_BBU_DQN":
         p1_dqn = DQN_BOB(possible_positions, device).to(device)
         p1_dqn.load_state_dict(torch.load(f"PyTorch_Models/p1_dqn_boblstm.pt", map_location = device))
         p1_dqn.eval()
@@ -172,7 +172,7 @@ def validate(strategy, make_gif = False):
         p2_first_knowledge_model.stop()
         p2_second_knowledge_model.stop()
 
-    elif strategy == "FIRST":
+    elif strategy == "First_Order_BBU_DQN":
         p1_first_knowledge_model = LSTM(hidden_state_size = 256, possible_positions = possible_positions, device=device).to(device)
         p1_first_knowledge_model.load_state_dict(torch.load(f"PyTorch_Models/p1_lstm256.pt", map_location = device))
         p2_first_knowledge_model = LSTM(hidden_state_size = 256, possible_positions = possible_positions, device=device).to(device)
@@ -187,7 +187,7 @@ def validate(strategy, make_gif = False):
         p2_dqn.load_state_dict(torch.load(f"PyTorch_Models/p2_dqn_lstm.pt", map_location = device))
         p1_dqn.eval()
         p2_dqn.eval()
-    elif strategy == "inter":
+    elif strategy == "First_Order_BBU_DT":
         p1_first_knowledge_model = LSTM(hidden_state_size = 256, possible_positions = possible_positions, device=device).to(device)
         p1_first_knowledge_model.load_state_dict(torch.load(f"PyTorch_Models/p1_lstm256.pt", map_location = device))
         p2_first_knowledge_model = LSTM(hidden_state_size = 256, possible_positions = possible_positions, device=device).to(device)
@@ -195,7 +195,7 @@ def validate(strategy, make_gif = False):
 
         p1_first_knowledge_model.stop()
         p2_first_knowledge_model.stop()
-    elif strategy == "inter2":
+    elif strategy == "Second_Order_BBU_DT":
         p1_first_knowledge_model = LSTM(hidden_state_size = 256, possible_positions = possible_positions, device=device).to(device)
         p1_first_knowledge_model.load_state_dict(torch.load(f"PyTorch_Models/p1_lstm256.pt", map_location = device))
 
@@ -215,7 +215,7 @@ def validate(strategy, make_gif = False):
         p2_first_knowledge_model.stop()
         p2_second_knowledge_model.stop()
 
-    elif strategy == "KBU":
+    elif strategy == "First_Order_KBU_DT":
         number_of_games         = 1
         p1_first_knowledge_model = KBU(size)
         p2_first_knowledge_model = KBU(size) 
@@ -225,7 +225,7 @@ def validate(strategy, make_gif = False):
         p2_dqn = DQN(possible_positions, device).to(device)
         p2_dqn.load_state_dict(torch.load(f"PyTorch_Models/p2_dqn_kbu.pt", map_location = device))
 
-    elif strategy == "interKBU":
+    elif strategy == "First_Order_KBU_DT":
         number_of_games         = 1
         p1_first_knowledge_model = KBU(size)
         p2_first_knowledge_model = KBU(size) 
@@ -268,12 +268,12 @@ def validate(strategy, make_gif = False):
         nonlocal strategy
         game_seed[index] = seed+simulation
         games[index] = Create_Game(size, t_max, game_seed[index])
-        if strategy == "BOB" or strategy == "inter2":
+        if strategy == "Second_Order_BBU_DQN" or strategy == "Second_Order_BBU_DT":
             p1_first_knowledge_states[index]    = p1_first_knowledge_model.init_state()
             p1_second_knowledge_states[index]   = p1_second_knowledge_model.init_state()
             p2_first_knowledge_states[index]    = p2_first_knowledge_model.init_state()
             p2_second_knowledge_states[index]   = p2_second_knowledge_model.init_state()
-        elif strategy == "FIRST" or strategy == "inter" or strategy == "KBU" or strategy == "interKBU":
+        elif strategy == "First_Order_BBU_DQN" or strategy == "First_Order_BBU_DT" or strategy == "First_Order_KBU_DT" or strategy == "First_Order_KBU_DT":
             p1_first_knowledge_states[index]    = p1_first_knowledge_model.init_state()
             p2_first_knowledge_states[index]    = p2_first_knowledge_model.init_state()
 
@@ -324,13 +324,13 @@ def validate(strategy, make_gif = False):
         running_indexes = [i for i in range(number_of_games) if games[i] is not None]
         running_games   = [games[i] for i in running_indexes]
 
-        if strategy == "naive" and make_gif:
+        if strategy == "Naive_Perfect_Information" and make_gif:
             evader_probabilities                    = torch.zeros(1, 225, device =device)  
             teammate_probabilities                  = torch.zeros(1, 225, device =device)  
             teammate_evader_probabilities           = torch.zeros(1, 225, device =device)  
             teammate_teammate_probabilities         = torch.zeros(1, 225, device =device)  
 
-        if strategy == "BOB":
+        if strategy == "Second_Order_BBU_DQN":
             p1_results = knowledge_based_action_bob_dqn(
                 "P1", 
                 running_games, 
@@ -341,9 +341,9 @@ def validate(strategy, make_gif = False):
                 p1_first_knowledge_model,
                 p1_second_knowledge_model,
                 [steps[i] / (2 * t_max) for i in running_indexes])
-        elif strategy == "FIRST":
+        elif strategy == "First_Order_BBU_DQN":
             p1_results = knowledge_based_action("P1", running_games, p1_dqn, epsilon, [p1_first_knowledge_states[i] for i in running_indexes], p1_first_knowledge_model, True, [steps[i] / (2 * t_max) for i in running_indexes])
-        elif strategy == "KBU": 
+        elif strategy == "First_Order_KBU_DT": 
             p1_results = knowledge_based_action("P1", running_games, p1_dqn, epsilon, [None]*len(running_indexes),  p1_first_knowledge_model, False, [steps[i] / (2 * t_max) for i in running_indexes])
         else:
             p1_results = []
@@ -351,7 +351,7 @@ def validate(strategy, make_gif = False):
         p2_running_indexes = []
 
         for index, running_index in enumerate(running_indexes):
-            if strategy == "BOB":
+            if strategy == "Second_Order_BBU_DQN":
                 (agent_position, 
                  action, 
                  p1_first_knowledge_states[running_index],
@@ -361,14 +361,14 @@ def validate(strategy, make_gif = False):
                  teammate_evader_probabilities, 
                  teammate_teammate_probabilities, 
                  )  = p1_results[index]
-            elif strategy == "FIRST":
+            elif strategy == "First_Order_BBU_DQN":
                 (agent_position, 
                 action, 
                 evader_probabilities, 
                 teammate_probabilities, 
                 p1_first_knowledge_states[running_index]
                 ) = p1_results[index]
-            elif strategy == "KBU":
+            elif strategy == "First_Order_KBU_DT":
                 (agent_position, 
                 action, 
                 evader_probabilities, 
@@ -376,7 +376,7 @@ def validate(strategy, make_gif = False):
                 _
                 ) = p1_results[index]
             else:
-                if strategy == "inter":
+                if strategy == "First_Order_BBU_DT":
                     agent_position                  = games[running_index].agents["P1"].position
                     valid_moves                     = games[running_index].valid_moves(agent_position)  
                     hidden_state_0 = p1_first_knowledge_states[running_index][0].squeeze(0)
@@ -391,13 +391,13 @@ def validate(strategy, make_gif = False):
 
 
                     action = ia1(evader_probabilities.cpu().numpy(), teammate_probabilities.cpu().numpy(), None, None, agent_position, (steps[running_index]  / (2 * t_max)), 0.1, 15, valid_moves)
-                elif strategy == "interKBU":
+                elif strategy == "First_Order_KBU_DT":
                     agent_position                  = games[running_index].agents["P1"].position
                     valid_moves                     = games[running_index].valid_moves(agent_position)  
                     evader_probabilities, teammate_probabilities = p1_first_knowledge_model.forward("P1", games[running_index]) 
 
                     action = ia1_KBU(evader_probabilities, teammate_probabilities, None, None, agent_position, (steps[running_index]  / (2 * t_max)), 0.1, 15, valid_moves)
-                elif strategy == "inter2":
+                elif strategy == "Second_Order_BBU_DT":
                     time_left = (steps[running_index] / (2 * t_max))
                     agent_position                  = games[running_index].agents["P1"].position
                     valid_moves                     = games[running_index].valid_moves(agent_position)  
@@ -442,7 +442,7 @@ def validate(strategy, make_gif = False):
 
             if make_gif:
                 if len(p1_state_vector) < 1:
-                    if strategy == "BOB" or strategy == "inter2":
+                    if strategy == "Second_Order_BBU_DQN" or strategy == "Second_Order_BBU_DT":
                         p2_stategif = state(
                             evader_probability  = evader_probabilities,
                             teammate_probability= teammate_probabilities,
@@ -460,7 +460,7 @@ def validate(strategy, make_gif = False):
                     p2_state_vector.append(p2_stategif)
                     e1_state_vector.append(e1_stategif)
 
-                if strategy == "BOB" or strategy == "inter2":
+                if strategy == "Second_Order_BBU_DQN" or strategy == "Second_Order_BBU_DT":
                     stategif = state(
                         evader_probability  = evader_probabilities,
                         teammate_probability= teammate_probabilities,
@@ -490,7 +490,7 @@ def validate(strategy, make_gif = False):
 
         if p2_running_indexes:
             p2_running_games   = [games[i] for i in p2_running_indexes]
-            if strategy == "BOB":
+            if strategy == "Second_Order_BBU_DQN":
                 p2_results = knowledge_based_action_bob_dqn(
                     "P2", 
                     p2_running_games, 
@@ -501,9 +501,9 @@ def validate(strategy, make_gif = False):
                     p2_first_knowledge_model,
                     p2_second_knowledge_model,
                     [steps[i] / (2 * t_max) for i in p2_running_indexes])
-            elif strategy == "FIRST":
+            elif strategy == "First_Order_BBU_DQN":
                 p2_results = knowledge_based_action("P2", p2_running_games, p2_dqn, epsilon, [p2_first_knowledge_states[i] for i in p2_running_indexes], p2_first_knowledge_model, True, [steps[i] / (2 * t_max) for i in p2_running_indexes])
-            elif strategy == "KBU":
+            elif strategy == "First_Order_KBU_DT":
                 p2_results = knowledge_based_action("P2", p2_running_games, p2_dqn, epsilon, [None]*len(p2_running_indexes), p2_first_knowledge_model, False, [steps[i] / (2 * t_max) for i in p2_running_indexes])
             else:
                 p2_results = []
@@ -513,7 +513,7 @@ def validate(strategy, make_gif = False):
         evader_running_index = []
 
         for index, running_index in enumerate(p2_running_indexes):
-            if strategy == "BOB":
+            if strategy == "Second_Order_BBU_DQN":
                 (agent_position, 
                  action, 
                  p2_first_knowledge_states[running_index],
@@ -523,14 +523,14 @@ def validate(strategy, make_gif = False):
                  teammate_evader_probabilities, 
                  teammate_teammate_probabilities, 
                  )  = p2_results[index]
-            elif strategy == "FIRST":
+            elif strategy == "First_Order_BBU_DQN":
                 (agent_position, 
                 action, 
                 evader_probabilities, 
                 teammate_probabilities, 
                 p2_first_knowledge_states[running_index]
                 ) = p2_results[index]
-            elif strategy == "KBU":
+            elif strategy == "First_Order_KBU_DT":
                 (agent_position, 
                 action, 
                 evader_probabilities, 
@@ -538,7 +538,7 @@ def validate(strategy, make_gif = False):
                 _,
                 ) = p2_results[index]
             else:
-                if strategy == "inter":
+                if strategy == "First_Order_BBU_DT":
                     agent_position                  = games[running_index].agents["P2"].position
                     valid_moves                     = games[running_index].valid_moves(agent_position)  
                     hidden_state_0 = p2_first_knowledge_states[running_index][0].squeeze(0)
@@ -553,13 +553,13 @@ def validate(strategy, make_gif = False):
 
 
                     action = ia2(evader_probabilities.cpu().numpy(), teammate_probabilities.cpu().numpy(), None, None, agent_position, (steps[running_index]  / (2 * t_max)), 0.1, 15, valid_moves)  
-                elif strategy == "interKBU":
+                elif strategy == "First_Order_KBU_DT":
                     agent_position                  = games[running_index].agents["P2"].position
                     valid_moves                     = games[running_index].valid_moves(agent_position)  
                     evader_probabilities, teammate_probabilities = p2_first_knowledge_model.forward("P2", games[running_index]) 
 
                     action = ia2_KBU(evader_probabilities, teammate_probabilities, None, None, agent_position, (steps[running_index]  / (2 * t_max)), 0.1, 15, valid_moves)
-                elif strategy == "inter2":
+                elif strategy == "Second_Order_BBU_DT":
                     time_left = (steps[running_index]  / (2 * t_max))
                     agent_position                  = games[running_index].agents["P2"].position
                     valid_moves                     = games[running_index].valid_moves(agent_position)  
@@ -608,7 +608,7 @@ def validate(strategy, make_gif = False):
                     action = best_action
 
             if make_gif:
-                if strategy == "BOB" or strategy == "inter2":
+                if strategy == "Second_Order_BBU_DQN" or strategy == "Second_Order_BBU_DT":
                     stategif = state(
                         evader_probability  = evader_probabilities,
                         teammate_probability= teammate_probabilities,
@@ -662,25 +662,26 @@ def validate(strategy, make_gif = False):
 
 
 if __name__ == "__main__":
-    #validate("KBU")
-    #validate("BOB")
-    #validate("FIRST")
-    #validate("naive")
-    validate("inter")
-    #validate("inter2")
-    #validate("interKBU")
-    #validate("KBU")
+    #validate("First_Order_KBU_DT")
+    #validate("Second_Order_BBU_DQN")
+    #validate("First_Order_BBU_DQN")
+    #validate("Naive_Perfect_Information")
+    
+    validate("First_Order_BBU_DT")
+    #validate("Second_Order_BBU_DT")
+    #validate("First_Order_KBU_DT")
+    #validate("First_Order_KBU_DT")
 
     #print("\nplots:\n")
     #print("Naive is Plottin")
-    #validate("naive", True)
+    #validate("Naive_Perfect_Information", True)
 #
     #print("DQNs are Plottin")
-    #validate("BOB", True)
-    #validate("FIRST", True)
-    #validate("KBU", True)
+    #validate("Second_Order_BBU_DQN", True)
+    #validate("First_Order_BBU_DQN", True)
+    #validate("First_Order_KBU_DT", True)
 #
     #print("Trees are Plottin")
-    #validate("inter", True)
-    #validate("inter2", True)
-    #validate("interKBU", True)
+    #validate("First_Order_BBU_DT", True)
+    #validate("Second_Order_BBU_DT", True)
+    #validate("First_Order_KBU_DT", True)
